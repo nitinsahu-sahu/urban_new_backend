@@ -24,13 +24,31 @@ const generate_refund_transaction_id = (originalTransactionId) => {
   return `${prefix}_${epoch}_${originalTransactionId}`;
 };
 
-const verify_phonepe_signature = (req) => {
-  // Just check if request has valid headers
-  const clientId = req.headers['x-client-id'];
-  const merchantId = req.headers['x-merchant-id'];
-  
-  // Basic validation
-  return clientId === process.env.PHONEPE_CLIENT_ID;
+const verify_phonepe_signature = (payload, receivedSignature, saltKey, saltIndex) => {
+  try {
+    // Method 1: SHA256 + Salt Key
+    const payloadString = JSON.stringify(payload);
+    const dataToHash = payloadString + saltKey;
+    
+    const hash = crypto
+      .createHash('sha256')
+      .update(dataToHash)
+      .digest('hex');
+    
+    // Expected format: hash###saltIndex
+    const expectedSignature = `${hash}###${saltIndex}`;
+    
+    console.log("Generated Hash:", hash);
+    console.log("Expected Signature:", expectedSignature);
+    console.log("Received Signature:", receivedSignature);
+    
+    // Compare signatures
+    return receivedSignature === expectedSignature;
+    
+  } catch (error) {
+    console.error("Signature verification error:", error);
+    return false;
+  }
 };
 
 const format_amount_to_paise = (amount) => {

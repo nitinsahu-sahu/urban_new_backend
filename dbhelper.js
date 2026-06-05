@@ -23,7 +23,7 @@ const initializeDatabase = async () => {
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_schema = 'public' 
-        AND table_name = 'paymentstable'
+        AND table_name = 'paymentsTable'
       );
     `);
 
@@ -33,7 +33,7 @@ const initializeDatabase = async () => {
       // ========== CREATE PAYMENTS TABLE ==========
       console.log('📝 Creating paymentsTable...');
       await client.query(`
-        CREATE TABLE paymentstable (
+        CREATE TABLE paymentsTable (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
           payment_id VARCHAR(255) NOT NULL,
           user_id VARCHAR(255) NOT NULL,
@@ -61,7 +61,7 @@ const initializeDatabase = async () => {
         SELECT EXISTS (
           SELECT FROM information_schema.columns 
           WHERE table_schema = 'public' 
-          AND table_name = 'paymentstable' 
+          AND table_name = 'paymentsTable' 
           AND column_name = 'merchant_transaction_id'
         );
       `);
@@ -70,11 +70,11 @@ const initializeDatabase = async () => {
         console.log('⚠️  Old table structure detected, recreating table...');
         
         // Drop old table
-        await client.query('DROP TABLE IF EXISTS paymentstable CASCADE;');
+        await client.query('DROP TABLE IF EXISTS paymentsTable CASCADE;');
         
         // Create new table with correct structure
         await client.query(`
-          CREATE TABLE paymentstable (
+          CREATE TABLE paymentsTable (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
             payment_id VARCHAR(255) NOT NULL,
             user_id VARCHAR(255) NOT NULL,
@@ -102,8 +102,8 @@ const initializeDatabase = async () => {
     
     try {
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_paymentstable_merchant_txn 
-        ON paymentstable(merchant_transaction_id);
+        CREATE INDEX IF NOT EXISTS idx_paymentsTable_merchant_txn 
+        ON paymentsTable(merchant_transaction_id);
       `);
       console.log('  ✅ Index: merchant_transaction_id');
     } catch (err) {
@@ -112,8 +112,8 @@ const initializeDatabase = async () => {
 
     try {
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_paymentstable_user_id 
-        ON paymentstable(user_id);
+        CREATE INDEX IF NOT EXISTS idx_paymentsTable_user_id 
+        ON paymentsTable(user_id);
       `);
       console.log('  ✅ Index: user_id');
     } catch (err) {
@@ -122,8 +122,8 @@ const initializeDatabase = async () => {
 
     try {
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_paymentstable_status 
-        ON paymentstable(status);
+        CREATE INDEX IF NOT EXISTS idx_paymentsTable_status 
+        ON paymentsTable(status);
       `);
       console.log('  ✅ Index: status');
     } catch (err) {
@@ -132,8 +132,8 @@ const initializeDatabase = async () => {
 
     try {
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_paymentstable_created_at 
-        ON paymentstable(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_paymentsTable_created_at 
+        ON paymentsTable(created_at DESC);
       `);
       console.log('  ✅ Index: created_at');
     } catch (err) {
@@ -154,7 +154,7 @@ const initializeDatabase = async () => {
       await client.query(`
         CREATE TABLE refunds (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-          payment_id UUID REFERENCES paymentstable(id) ON DELETE CASCADE,
+          payment_id UUID REFERENCES paymentsTable(id) ON DELETE CASCADE,
           refund_transaction_id VARCHAR(255) UNIQUE NOT NULL,
           amount INTEGER NOT NULL,
           reason TEXT,

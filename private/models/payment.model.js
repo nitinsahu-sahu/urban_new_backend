@@ -2,7 +2,7 @@
 const { pool } = require("../../dbhelper");
 const { current_epoch_time } = require("../methods/current_epoch_time");
 const { random_number } = require("../methods/random_number");
-const { 
+const {
   generate_merchant_transaction_id,
   generate_merchant_order_id,
   format_amount_to_paise
@@ -18,7 +18,7 @@ const create_payment_model = async (user_id, amount, callback_url, metadata = {}
     const amount_in_paise = format_amount_to_paise(amount);
 
     const query = `
-      INSERT INTO paymentstable (
+      INSERT INTO paymentsTable (
         id, payment_id, user_id, merchant_transaction_id, merchant_order_id,
         amount, currency, status, callback_url, metadata, created_at, is_active, is_deleted
       ) VALUES (
@@ -96,28 +96,27 @@ const get_payment_by_transaction_id_model = async (merchant_transaction_id) => {
 const update_payment_status_model = async (merchant_transaction_id, status, phonepe_transaction_id = null, phonepe_response = null) => {
   try {
     const updated_at = current_epoch_time();
-    
-    let query = `
+    const query = `
       UPDATE paymentsTable 
-      SET status = $1, updated_at = $2
+      SET 
+        status = $1,
+        phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
+        phonepe_webhook_response = $3,
+        updated_at = NOW(),
+        payment_completed_at = CASE 
+          WHEN $1 = 'SUCCESS' THEN NOW() 
+          ELSE payment_completed_at 
+        END
+      WHERE merchant_transaction_id = $4
+      RETURNING *
     `;
-    let values = [status, updated_at];
-    let paramCount = 3;
 
-    if (phonepe_transaction_id) {
-      query += `, phonepe_transaction_id = $${paramCount}`;
-      values.push(phonepe_transaction_id);
-      paramCount++;
-    }
-
-    if (phonepe_response) {
-      query += `, phonepe_response = $${paramCount}`;
-      values.push(JSON.stringify(phonepe_response));
-      paramCount++;
-    }
-
-    query += ` WHERE merchant_transaction_id = $${paramCount} AND is_active = true AND is_deleted = false RETURNING *;`;
-    values.push(merchant_transaction_id);
+    const values = [
+      status,
+      phonepe_transaction_id,
+      JSON.stringify(phonepe_response),
+      merchant_transaction_id
+    ];
 
     const result = await pool.query(query, values);
 
@@ -145,7 +144,7 @@ const update_payment_status_model = async (merchant_transaction_id, status, phon
 const update_payment_refund_model = async (merchant_transaction_id, metadata) => {
   try {
     const updated_at = current_epoch_time();
-    
+
     const query = `
       UPDATE paymentsTable 
       SET status = 'REFUNDED', 
@@ -156,7 +155,7 @@ const update_payment_refund_model = async (merchant_transaction_id, metadata) =>
       AND is_deleted = false 
       RETURNING *;
     `;
-    
+
     const values = [JSON.stringify(metadata), updated_at, merchant_transaction_id];
     const result = await pool.query(query, values);
 
@@ -184,7 +183,7 @@ const update_payment_refund_model = async (merchant_transaction_id, metadata) =>
 const get_user_payments_model = async (user_id, page = 1, limit = 10, status = null) => {
   try {
     const offset = (page - 1) * limit;
-    
+
     let countQuery = `
       SELECT COUNT(*) as total 
       FROM paymentsTable 
@@ -192,14 +191,14 @@ const get_user_payments_model = async (user_id, page = 1, limit = 10, status = n
       AND is_active = true 
       AND is_deleted = false
     `;
-    
+
     let query = `
       SELECT * FROM paymentsTable 
       WHERE user_id = $1 
       AND is_active = true 
       AND is_deleted = false
     `;
-    
+
     let values = [user_id];
     let paramCount = 2;
 

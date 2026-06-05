@@ -415,86 +415,90 @@ exports.verify_refund = async (req, res) => {
 // ================= HANDLE WEBHOOK =================
 exports.handle_webhook = async (req, res) => {
   try {
-    const webhook_data = req.body;
-    const signature = req.headers['x-verify'];
-
-    // Verify webhook signature
-    const is_valid = verify_phonepe_signature(
-      JSON.stringify(webhook_data),
-      signature
-    );
-
-    if (!is_valid) {
-      console.error("Invalid webhook signature");
-      return res.status(400).json({
+    console.log("===== Webhook Received =====");
+    console.log("Headers:", req.headers);
+    
+    // ✅ PhonePe header 'x-verify' (lowercase in Express)
+    const phonepeSignature = req.headers['x-verify'];
+    const saltKey = process.env.PHONEPE_SALT_KEY;
+    const saltIndex = process.env.PHONEPE_SALT_INDEX;
+    
+    console.log("Signature present:", !!phonepeSignature);
+    
+    if (!phonepeSignature) {
+      console.error("❌ No signature in headers");
+      return res.status(200).json({  // 200 to prevent PhonePe retries
         success: false,
-        message: "Invalid signature"
+        code: "MISSING_SIGNATURE"
       });
     }
-
-    const {
-      merchantTransactionId,
-      transactionId,
-      state,
-      responseCode
-    } = webhook_data;
-
-    // Find the payment record
-    const payment_result = await get_payment_by_transaction_id_model(merchantTransactionId);
-
-    if (!payment_result.success) {
-      console.error("Payment not found for webhook:", merchantTransactionId);
-      return res.status(404).json({
+    
+    // Parse raw body
+    let payload;
+    try {
+      payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    } catch (e) {
+      payload = req.body;
+    }
+    
+    const isValid = verify_phonepe_signature(payload, phonepeSignature, saltKey, saltIndex);
+    
+    if (!isValid) {
+      console.error("❌ Invalid signature");
+      return res.status(200).json({
         success: false,
-        message: "Payment not found"
+        code: "INVALID_SIGNATURE"
       });
     }
-
-    // Map PhonePe status
-    let status;
+    
+    console.log("✅ Signature verified");
+    
+    // Process payment data
+    let paymentData = payload;
+    
+    if (payload.response) {
+      try {
+        const decoded = Buffer.from(payload.response, 'base64').toString('utf-8');
+        paymentData = JSON.parse(decoded);
+      } catch (e) {
+        console.error("Decode error:", e);
+      }
+    }
+    
+    const data = paymentData.data || paymentData;
+    const { merchantTransactionId, transactionId, state } = data;
+    
+    console.log("Payment Data:", { merchantTransactionId, transactionId, state });
+    
+    if (!merchantTransactionId) {
+      return res.status(200).json({ success: false, code: "NO_TRANSACTION_ID" });
+    }
+    
+    let paymentStatus;
     switch (state) {
-      case 'COMPLETED':
-        status = 'SUCCESS';
-        break;
-      case 'FAILED':
-        status = 'FAILED';
-        break;
-      case 'CANCELLED':
-        status = 'CANCELLED';
-        break;
-      default:
-        status = 'PENDING';
+      case 'COMPLETED': paymentStatus = 'SUCCESS'; break;
+      case 'FAILED': paymentStatus = 'FAILED'; break;
+      case 'CANCELLED': paymentStatus = 'CANCELLED'; break;
+      default: paymentStatus = 'PENDING';
     }
-
-    // Update payment status
-    const current_payment = payment_result.data;
-    const updated_response = {
-      ...(current_payment.phonepe_response || {}),
-      webhook: webhook_data
-    };
-
-    await update_payment_status_model(
-      merchantTransactionId,
-      status,
-      transactionId,
-      updated_response
-    );
-
-    // Handle successful payment
-    if (status === 'SUCCESS') {
+    
+    await update_payment_status_model(merchantTransactionId, paymentStatus, transactionId, paymentData);
+    
+    // If payment successful, trigger business logic
+    if (paymentStatus === 'SUCCESS') {
       await handle_successful_payment(merchantTransactionId);
     }
-
+    
     return res.status(200).json({
       success: true,
-      message: "Webhook processed successfully"
+      code: "SUCCESS"
     });
-
+    
   } catch (error) {
-    console.error("Webhook processing error:", error);
-    return res.status(500).json({
+    console.error("❌ Webhook Error:", error);
+    return res.status(200).json({
       success: false,
-      message: error.message
+      code: "ERROR"
     });
   }
 };
@@ -561,5 +565,75 @@ exports.get_payment_by_id = async (req, res) => {
   } catch (error) {
     console.error("Get payment by ID error:", error);
     return sendResponse(res, false, error.message, null, 500);
+  }
+};
+
+exports.payment_return = async (req, res) => {
+  try {
+    console.log("===== PhonePe Return URL Called =====");
+    console.log("Query Parameters:", req.query);
+    
+    const { 
+      merchantTransactionId, 
+      transactionId, 
+      code, 
+      message 
+    } = req.query;
+    
+    // PhonePe different formats mein bhej sakta hai
+    const txnId = merchantTransactionId || req.query.merchant_transaction_id;
+    
+    console.log("Transaction ID:", txnId, "Code:", code);
+    
+    switch (code) {
+      case 'PAYMENT_SUCCESS':
+        console.log("✅ Payment Successful:", txnId);
+        
+        // Update payment status
+        await update_payment_status_model(txnId, 'SUCCESS', transactionId);
+        
+        // Redirect to Flutter app using deep link
+        return res.redirect(
+          `${process.env.FRONTEND_URL}/payment/return?` +
+          `status=success&` +
+          `order_id=${txnId}&` +
+          `transaction_id=${transactionId}`
+        );
+        
+      case 'PAYMENT_ERROR':
+        console.log("❌ Payment Failed:", txnId);
+        await update_payment_status_model(txnId, 'FAILED', transactionId);
+        
+        return res.redirect(
+          `${process.env.FRONTEND_URL}/payment/return?` +
+          `status=failed&` +
+          `order_id=${txnId}&` +
+          `message=${encodeURIComponent(message || 'Payment failed')}`
+        );
+        
+      case 'PAYMENT_PENDING':
+        console.log("⏳ Payment Pending:", txnId);
+        
+        return res.redirect(
+          `${process.env.FRONTEND_URL}/payment/return?` +
+          `status=pending&` +
+          `order_id=${txnId}`
+        );
+        
+      default:
+        console.log("❓ Unknown status:", code);
+        return res.redirect(
+          `${process.env.FRONTEND_URL}/payment/return?` +
+          `status=unknown&` +
+          `order_id=${txnId}&` +
+          `code=${code}`
+        );
+    }
+    
+  } catch (error) {
+    console.error("❌ Return URL Error:", error);
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/payment/return?status=error`
+    );
   }
 };

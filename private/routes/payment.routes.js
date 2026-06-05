@@ -8,7 +8,8 @@ const {
   verify_refund,
   handle_webhook,
   get_payment_history,
-  get_payment_by_id
+  get_payment_by_id,
+  payment_return
 } = require("../controllers/payment/payment.controller");
 const isAuth = require("../methods/token_validate_middelware");
 const router = express.Router();
@@ -28,7 +29,7 @@ router.get("/refund/verify/:refund_transaction_id", isAuth, verify_refund);
 
 // ================= WEBHOOK (NO AUTH REQUIRED) =================
 router.post("/webhook", handle_webhook);
-
+router.get("/return", payment_return);
 // ================= PAYMENT HISTORY =================
 router.get("/history", isAuth, get_payment_history);
 router.get("/:payment_id", isAuth, get_payment_by_id);

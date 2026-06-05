@@ -55,6 +55,12 @@ app.get("/status", (request, response) => {
   });
 });
 
+// IMPORTANT: Webhook route के लिए raw body parser
+app.use('/payment/webhook', express.raw({ 
+  type: 'application/json',
+  limit: '5mb' 
+}));
+
 // Mount routes
 app.use("/users", users);
 app.use("/verify_otp", verify_otp);
