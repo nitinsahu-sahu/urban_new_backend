@@ -18,12 +18,23 @@ const initializeDatabase = async () => {
     
     await client.query('BEGIN');
 
+    // ========== DROP OLD TABLE (If structure changed) ==========
+    // ⚠️ Production में carefully use करें - data loss हो सकता है
+    const dropOld = false; // true करें अगर fresh start करना है
+    
+    if (dropOld) {
+      console.log('⚠️  Dropping old tables...');
+      await client.query('DROP TABLE IF EXISTS refunds CASCADE;');
+      await client.query('DROP TABLE IF EXISTS paymentsTable CASCADE;');
+      await client.query('DROP TABLE IF EXISTS paymentstable CASCADE;');
+    }
+
     // ========== CHECK IF TABLE EXISTS ==========
     const tableCheck = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_schema = 'public' 
-        AND table_name = 'paymentsTable'
+        AND table_name = 'paymentstable'
       );
     `);
 
@@ -31,116 +42,79 @@ const initializeDatabase = async () => {
 
     if (!tableExists) {
       // ========== CREATE PAYMENTS TABLE ==========
-      console.log('📝 Creating paymentsTable...');
+      console.log('📝 Creating paymentstable...');
       await client.query(`
-        CREATE TABLE paymentsTable (
+        CREATE TABLE paymentstable (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
           payment_id VARCHAR(255) NOT NULL,
           user_id VARCHAR(255) NOT NULL,
           merchant_transaction_id VARCHAR(255) UNIQUE NOT NULL,
           merchant_order_id VARCHAR(255) NOT NULL,
+          phonepe_transaction_id VARCHAR(255),
           amount INTEGER NOT NULL,
           currency VARCHAR(10) DEFAULT 'INR',
           status VARCHAR(50) DEFAULT 'PENDING',
-          phonepe_transaction_id VARCHAR(255),
           phonepe_response JSONB,
+          phonepe_webhook_response JSONB,
           callback_url TEXT,
           metadata JSONB DEFAULT '{}',
+          payment_completed_at TIMESTAMP,
           created_at BIGINT NOT NULL,
           updated_at BIGINT,
           is_active BOOLEAN DEFAULT true,
           is_deleted BOOLEAN DEFAULT false
         );
       `);
-      console.log('✅ paymentsTable created successfully');
+      console.log('✅ paymentstable created successfully');
     } else {
-      console.log('ℹ️  paymentsTable already exists');
+      console.log('ℹ️  paymentstable already exists');
       
-      // Check if merchant_transaction_id column exists
-      const columnCheck = await client.query(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.columns 
-          WHERE table_schema = 'public' 
-          AND table_name = 'paymentsTable' 
-          AND column_name = 'merchant_transaction_id'
-        );
-      `);
-
-      if (!columnCheck.rows[0].exists) {
-        console.log('⚠️  Old table structure detected, recreating table...');
-        
-        // Drop old table
-        await client.query('DROP TABLE IF EXISTS paymentsTable CASCADE;');
-        
-        // Create new table with correct structure
-        await client.query(`
-          CREATE TABLE paymentsTable (
-            id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-            payment_id VARCHAR(255) NOT NULL,
-            user_id VARCHAR(255) NOT NULL,
-            merchant_transaction_id VARCHAR(255) UNIQUE NOT NULL,
-            merchant_order_id VARCHAR(255) NOT NULL,
-            amount INTEGER NOT NULL,
-            currency VARCHAR(10) DEFAULT 'INR',
-            status VARCHAR(50) DEFAULT 'PENDING',
-            phonepe_transaction_id VARCHAR(255),
-            phonepe_response JSONB,
-            callback_url TEXT,
-            metadata JSONB DEFAULT '{}',
-            created_at BIGINT NOT NULL,
-            updated_at BIGINT,
-            is_active BOOLEAN DEFAULT true,
-            is_deleted BOOLEAN DEFAULT false
-          );
-        `);
-        console.log('✅ paymentsTable recreated with correct structure');
-      }
+      // ========== ADD MISSING COLUMNS (Safe migration) ==========
+      console.log('\n🔍 Checking for missing columns...');
+      
+      // Check and add phonepe_webhook_response
+      await addColumnIfNotExists(client, 'paymentstable', 
+        'phonepe_webhook_response', 'JSONB');
+      
+      // Check and add payment_completed_at
+      await addColumnIfNotExists(client, 'paymentstable', 
+        'payment_completed_at', 'TIMESTAMP');
+      
+      // Check and add phonepe_response (if old table doesn't have it)
+      await addColumnIfNotExists(client, 'paymentstable', 
+        'phonepe_response', 'JSONB');
+      
+      // Check and add phonepe_transaction_id
+      await addColumnIfNotExists(client, 'paymentstable', 
+        'phonepe_transaction_id', 'VARCHAR(255)');
+      
+      console.log('✅ Column migration completed');
     }
 
     // ========== CREATE INDEXES ==========
     console.log('\n📊 Creating indexes...');
     
-    try {
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_paymentsTable_merchant_txn 
-        ON paymentsTable(merchant_transaction_id);
-      `);
-      console.log('  ✅ Index: merchant_transaction_id');
-    } catch (err) {
-      console.warn('  ⚠️  Could not create merchant_transaction_id index:', err.message);
+    const indexes = [
+      { name: 'idx_paymentstable_merchant_txn', column: 'merchant_transaction_id' },
+      { name: 'idx_paymentstable_user_id', column: 'user_id' },
+      { name: 'idx_paymentstable_status', column: 'status' },
+      { name: 'idx_paymentstable_created_at', column: 'created_at DESC' },
+      { name: 'idx_paymentstable_phonepe_txn', column: 'phonepe_transaction_id' },
+    ];
+
+    for (const index of indexes) {
+      try {
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS ${index.name} 
+          ON paymentstable(${index.column});
+        `);
+        console.log(`  ✅ Index: ${index.name}`);
+      } catch (err) {
+        console.warn(`  ⚠️  Could not create ${index.name}:`, err.message);
+      }
     }
 
-    try {
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_paymentsTable_user_id 
-        ON paymentsTable(user_id);
-      `);
-      console.log('  ✅ Index: user_id');
-    } catch (err) {
-      console.warn('  ⚠️  Could not create user_id index:', err.message);
-    }
-
-    try {
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_paymentsTable_status 
-        ON paymentsTable(status);
-      `);
-      console.log('  ✅ Index: status');
-    } catch (err) {
-      console.warn('  ⚠️  Could not create status index:', err.message);
-    }
-
-    try {
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_paymentsTable_created_at 
-        ON paymentsTable(created_at DESC);
-      `);
-      console.log('  ✅ Index: created_at');
-    } catch (err) {
-      console.warn('  ⚠️  Could not create created_at index:', err.message);
-    }
-
-    // ========== CREATE REFUNDS TABLE (OPTIONAL) ==========
+    // ========== CREATE REFUNDS TABLE ==========
     const refundTableCheck = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -154,8 +128,9 @@ const initializeDatabase = async () => {
       await client.query(`
         CREATE TABLE refunds (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-          payment_id UUID REFERENCES paymentsTable(id) ON DELETE CASCADE,
+          payment_id UUID REFERENCES paymentstable(id) ON DELETE CASCADE,
           refund_transaction_id VARCHAR(255) UNIQUE NOT NULL,
+          original_transaction_id VARCHAR(255),
           amount INTEGER NOT NULL,
           reason TEXT,
           status VARCHAR(50) DEFAULT 'INITIATED',
@@ -172,6 +147,17 @@ const initializeDatabase = async () => {
     }
 
     await client.query('COMMIT');
+    
+    // ========== PRINT TABLE STRUCTURE ==========
+    console.log('\n📋 Current paymentstable structure:');
+    const structure = await client.query(`
+      SELECT column_name, data_type, is_nullable 
+      FROM information_schema.columns 
+      WHERE table_name = 'paymentstable' 
+      ORDER BY ordinal_position;
+    `);
+    console.table(structure.rows);
+    
     console.log('\n🎉 All tables initialized successfully!\n');
 
   } catch (error) {
@@ -181,6 +167,33 @@ const initializeDatabase = async () => {
     throw error;
   } finally {
     client.release();
+  }
+};
+
+// ========== HELPER: Add column if not exists ==========
+const addColumnIfNotExists = async (client, tableName, columnName, columnType) => {
+  try {
+    const columnCheck = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = $1 
+        AND column_name = $2
+      );
+    `, [tableName, columnName]);
+
+    if (!columnCheck.rows[0].exists) {
+      console.log(`  ➕ Adding ${columnName} (${columnType})...`);
+      await client.query(`
+        ALTER TABLE ${tableName} 
+        ADD COLUMN ${columnName} ${columnType};
+      `);
+      console.log(`  ✅ Column ${columnName} added`);
+    } else {
+      console.log(`  ℹ️  Column ${columnName} already exists`);
+    }
+  } catch (error) {
+    console.warn(`  ⚠️  Could not add ${columnName}:`, error.message);
   }
 };
 
