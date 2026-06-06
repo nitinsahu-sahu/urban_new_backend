@@ -59,7 +59,20 @@ const format_paise_to_amount = (paise) => {
   return (paise / 100).toFixed(2);
 };
 
+const verifyPGChecksum = (base64Response, receivedChecksum, saltKey, saltIndex) => {
+  // PhonePe webhook response verify करने का formula
+  const stringToHash = base64Response + saltKey;
+  const sha256Hash = crypto
+    .createHash('sha256')
+    .update(stringToHash)
+    .digest('hex');
+  
+  const expectedChecksum = `${sha256Hash}###${saltIndex}`;
+  
+  return receivedChecksum === expectedChecksum;
+};
 module.exports = {
+  verifyPGChecksum,
   generate_merchant_transaction_id,
   generate_merchant_order_id,
   generate_refund_transaction_id,

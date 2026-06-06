@@ -1,37 +1,17 @@
 // routes/payment.route.js
 const express = require("express");
-const {
-  initiate_payment,
-  create_order,
-  check_order_status,
-  initiate_refund,
-  verify_refund,
-  handle_webhook,
-  get_payment_history,
-  get_payment_by_id,
-  payment_return
-} = require("../controllers/payment/payment.controller");
 const isAuth = require("../methods/token_validate_middelware");
 const router = express.Router();
 
-// ================= PAYMENT INITIATION =================
-router.post("/initiate", isAuth, initiate_payment);
+const {
+  initiate_payment_pg,
+  handle_webhook_pg,
+  check_status_pg,
+} = require("../controllers/payment/phonepe_pg.controller");
 
-// ================= ORDER CREATION =================
-router.post("/create-order", isAuth, create_order);
-
-// ================= ORDER STATUS =================
-router.get("/status/:merchant_transaction_id", isAuth, check_order_status);
-
-// ================= REFUND =================
-router.post("/refund/initiate", isAuth, initiate_refund);
-router.get("/refund/verify/:refund_transaction_id", isAuth, verify_refund);
-
-// ================= WEBHOOK (NO AUTH REQUIRED) =================
-router.post("/webhook", handle_webhook);
-router.get("/return", payment_return);
-// ================= PAYMENT HISTORY =================
-router.get("/history", isAuth, get_payment_history);
-router.get("/:payment_id", isAuth, get_payment_by_id);
+// ================= PG DIRECT PAYMENT (FLUTTER SDK) =================
+router.post("/pg/init", isAuth, initiate_payment_pg);
+router.post("/pg/webhook", handle_webhook_pg);  // No auth - PhonePe calls this
+router.get("/pg/status/:transactionId", isAuth, check_status_pg);
 
 module.exports = router;

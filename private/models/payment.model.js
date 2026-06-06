@@ -94,49 +94,98 @@ const get_payment_by_transaction_id_model = async (merchant_transaction_id) => {
 };
 
 const update_payment_status_model = async (merchant_transaction_id, status, phonepe_transaction_id = null, phonepe_response = null) => {
+  console.log("🔍 merchant_transaction_id:", merchant_transaction_id);
+  console.log("📝 status:", status);
+  console.log("🆔 phonepe_transaction_id:", phonepe_transaction_id);
+  
   try {
     const updated_at = current_epoch_time();
-    const query = `
-      UPDATE paymentsTable 
-      SET 
-        status = $1,
-        phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
-        phonepe_webhook_response = $3,
-        updated_at = NOW(),
-        payment_completed_at = CASE 
-          WHEN $1 = 'SUCCESS' THEN NOW() 
-          ELSE payment_completed_at 
-        END
-      WHERE merchant_transaction_id = $4
-      RETURNING *
-    `;
-
-    const values = [
-      status,
-      phonepe_transaction_id,
-      JSON.stringify(phonepe_response),
-      merchant_transaction_id
+    const responseJson = phonepe_response ? JSON.stringify(phonepe_response) : null;
+    
+    // Build query WITHOUT using $1 in CASE statement
+    // Use separate queries based on status to avoid type conflicts
+    let query;
+    let values;
+    
+    if (status === 'SUCCESS') {
+      query = `
+        UPDATE paymentstable 
+        SET 
+          status = $1,
+          phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
+          phonepe_webhook_response = $3::JSONB,
+          updated_at = $5,
+          payment_completed_at = NOW()
+        WHERE merchant_transaction_id = $4
+        AND is_active = true 
+        AND is_deleted = false
+        RETURNING *
+      `;
+    } else {
+      query = `
+        UPDATE paymentstable 
+        SET 
+          status = $1,
+          phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
+          phonepe_webhook_response = $3::JSONB,
+          updated_at = $5
+        WHERE merchant_transaction_id = $4
+        AND is_active = true 
+        AND is_deleted = false
+        RETURNING *
+      `;
+    }
+    
+    values = [
+      status,                    // $1
+      phonepe_transaction_id,    // $2
+      responseJson,              // $3
+      merchant_transaction_id,   // $4
+      updated_at                 // $5
     ];
 
+    console.log("📤 Query type:", status === 'SUCCESS' ? 'SUCCESS (with payment_completed_at)' : 'Other');
+    console.log("📤 Values:", values);
+
     const result = await pool.query(query, values);
+    console.log('📥 Rows updated:', result.rows.length);
 
     if (result.rows.length > 0) {
+      console.log("✅ Update successful:", result.rows[0].status);
       return {
         success: true,
         message: "Payment status updated successfully",
         data: result.rows[0]
       };
     } else {
-      return {
-        success: false,
-        message: "Payment record not found or update failed"
-      };
+      // Check if record exists at all
+      const checkQuery = `
+        SELECT id, merchant_transaction_id, status 
+        FROM paymentstable 
+        WHERE merchant_transaction_id = $1
+      `;
+      const checkResult = await pool.query(checkQuery, [merchant_transaction_id]);
+      
+      if (checkResult.rows.length === 0) {
+        console.error("❌ Record not found in database");
+        return {
+          success: false,
+          message: `Payment record not found for ID: ${merchant_transaction_id}`
+        };
+      } else {
+        console.error("❌ Record found but update failed. Current status:", checkResult.rows[0].status);
+        return {
+          success: false,
+          message: "Update failed - record exists but no rows modified"
+        };
+      }
     }
   } catch (error) {
-    console.error("Error in update_payment_status_model:", error);
+    console.error("❌ Error in update_payment_status_model:", error.message);
+    console.error("❌ Full error:", error);
     return {
       success: false,
-      error: "An unexpected error occurred while updating payment status"
+      error: error.message || "An unexpected error occurred while updating payment status"
     };
   }
 };
