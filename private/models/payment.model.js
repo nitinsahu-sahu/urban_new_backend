@@ -74,7 +74,7 @@ const create_payment_model = async (
     const payment_id = random_number();
     const merchant_transaction_id = generate_merchant_transaction_id();
     const merchant_order_id = custom_order_id || generate_merchant_order_id();
-    const amount_in_paise = format_amount_to_paise(amount);
+    const amount_in_paise = amount;
     const created_at = Date.now();
 
     const query = `

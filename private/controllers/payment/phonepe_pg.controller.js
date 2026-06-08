@@ -77,7 +77,6 @@ const getAuthToken = async () => {
       cachedToken = data.access_token;
       // Set expiry 5 minutes before actual expiry
       tokenExpiry = Date.now() + ((data.expires_in - 300) * 1000);
-      
       return cachedToken;
     } else {
       return sendResponse(res, false, 'Failed to obtain auth token', null, 404);
@@ -99,7 +98,6 @@ exports.initiate_payment_pg = async (req, res) => {
 
     // Generate merchant order ID
     const merchantOrderId = orderId || generate_merchant_transaction_id();
-    const amountInPaise = format_amount_to_paise(amount);
 
     // Step 1: Get Auth Token
     const authToken = await getAuthToken();
@@ -107,7 +105,7 @@ exports.initiate_payment_pg = async (req, res) => {
     // Step 2: Create PhonePe Order Payload (v2 format)
     const phonepePayload = {
       merchantOrderId: merchantOrderId,
-      amount: amountInPaise,
+      amount: format_amount_to_paise(amount),
       expireAfter: 1800, // 30 minutes in seconds
       metaInfo: {
         udf1: userId,
@@ -131,6 +129,7 @@ exports.initiate_payment_pg = async (req, res) => {
       },
       merchantOrderId
     );
+console.log("paymentResult",paymentResult);
 
     if (!paymentResult.success) {
       return sendResponse(res, false, "Failed to create payment record", null, 500);
@@ -148,8 +147,6 @@ exports.initiate_payment_pg = async (req, res) => {
       body: JSON.stringify(phonepePayload)
     });
     const orderData = await response.json();
-    // console.log('📥 PhonePe Order Response:', orderData);
-    // console.log('📥 Response Status:', response.status, response.statusText);
 
     if (response.ok && orderData.orderId) {
       // Step 5: Update payment with transaction ID
