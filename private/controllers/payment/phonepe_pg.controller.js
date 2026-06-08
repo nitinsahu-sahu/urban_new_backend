@@ -202,44 +202,123 @@ const verifyWebhookAuth = (req) => {
 };
 
 // ========== API 2: WEBHOOK (Callback from PhonePe) ==========
+// exports.handle_webhook_pg = async (req, res) => {
+//   const {
+//     merchantOrderId,
+//     transactionId,
+//     state,
+//     responseCode,
+//     amount
+//   } = payload;
+//   try {
+//     // ========== STEP 1: Verify Authorization ==========
+//     if (!verifyWebhookAuth(req)) {
+//       console.error('❌ Webhook authorization failed');
+//       return res.status(200).json({
+//         success: false,
+//         message: "Authorization failed"
+//       });
+//     }
+
+//     // ========== STEP 2: Extract Event Type ==========
+//     const event = req.body.event;
+//     const timestamp = req.body.timestamp;
+
+//     // PhonePe events:
+//     // - checkout.order.completed
+//     // - checkout.order.failed
+//     // - pg.refund.completed
+//     // - pg.refund.failed
+
+//     if (!event) {
+//       console.error('❌ No event type in webhook');
+//       return res.status(200).json({ success: false });
+//     }
+
+//     // ========== STEP 3: Extract Payload ==========
+//     const payload = req.body.payload;
+
+//     if (!payload) {
+//       console.error();
+//       return res.status(200).json({ success: false, message: "'❌ No payload in webhook'" });
+//     }
+
+//     const {
+//       merchantOrderId,
+//       transactionId,
+//       state,
+//       responseCode,
+//       amount
+//     } = payload;
+
+//     if (!merchantOrderId) {
+//       console.error('❌ No merchantOrderId in payload');
+//       return res.status(200).json({ success: false });
+//     }
+
+//     // ========== STEP 4: Handle Different Events ==========
+//     if (event === 'checkout.order.completed' || event === 'checkout.order.failed') {
+//       // Payment status update
+//       let paymentStatus = 'PENDING';
+
+//       if (state === 'COMPLETED' || responseCode === 'SUCCESS') {
+//         paymentStatus = 'SUCCESS';
+//       } else if (state === 'FAILED' || responseCode === 'FAILURE') {
+//         paymentStatus = 'FAILED';
+//       }
+
+//       console.log('✅ Payment Status:', paymentStatus);
+
+//       // Update database
+//       const updateResult = await update_payment_status_model(
+//         merchantOrderId,
+//         paymentStatus,
+//         transactionId,
+//         payload
+//       );
+
+//       console.log('📝 Update Result:', updateResult);
+
+//       if (updateResult.success && paymentStatus === 'SUCCESS') {
+//         await handleSuccessfulPaymentPG(merchantOrderId, payload);
+//       }
+
+//     } else if (event === 'pg.refund.completed' || event === 'pg.refund.failed') {
+//       // Handle refund events
+//       console.log('🔄 Refund event received:', event);
+//       // Add refund handling logic here
+//     } else {
+//       console.log('ℹ️  Unknown event type:', event);
+//     }
+
+//     // ========== STEP 5: Return Success ==========
+//     return res.status(200).json({
+//       success: true,
+//       message: "Webhook processed successfully"
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Webhook Error:', error);
+//     return res.status(200).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// };
 exports.handle_webhook_pg = async (req, res) => {
   try {
-    console.log('\n===== 📥 PG Webhook Received =====');
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('📩 Webhook Received:', JSON.stringify(req.body));
 
-    // ========== STEP 1: Verify Authorization ==========
+    // 1. AUTH CHECK
     if (!verifyWebhookAuth(req)) {
-      console.error('❌ Webhook authorization failed');
-      return res.status(200).json({
-        success: false,
-        message: "Authorization failed"
-      });
-    }
-
-    // ========== STEP 2: Extract Event Type ==========
-    const event = req.body.event;
-    const timestamp = req.body.timestamp;
-
-    console.log('📨 Event:', event);
-    console.log('⏰ Timestamp:', timestamp);
-
-    // PhonePe events:
-    // - checkout.order.completed
-    // - checkout.order.failed
-    // - pg.refund.completed
-    // - pg.refund.failed
-
-    if (!event) {
-      console.error('❌ No event type in webhook');
+      console.error('❌ Invalid webhook signature');
       return res.status(200).json({ success: false });
     }
 
-    // ========== STEP 3: Extract Payload ==========
-    const payload = req.body.payload;
+    const { event, payload } = req.body;
 
-    if (!payload) {
-      console.error('❌ No payload in webhook');
+    if (!event || !payload) {
+      console.error('❌ Missing event/payload');
       return res.status(200).json({ success: false });
     }
 
@@ -251,7 +330,7 @@ exports.handle_webhook_pg = async (req, res) => {
       amount
     } = payload;
 
-    console.log('📦 Payload Data:', {
+    console.log('📦 Extracted:', {
       merchantOrderId,
       transactionId,
       state,
@@ -260,53 +339,46 @@ exports.handle_webhook_pg = async (req, res) => {
     });
 
     if (!merchantOrderId) {
-      console.error('❌ No merchantOrderId in payload');
+      console.error('❌ merchantOrderId missing');
       return res.status(200).json({ success: false });
     }
 
-    // ========== STEP 4: Handle Different Events ==========
-    if (event === 'checkout.order.completed' || event === 'checkout.order.failed') {
-      // Payment status update
-      let paymentStatus = 'PENDING';
+    // 2. STATUS NORMALIZATION
+    const successStates = ['COMPLETED', 'SUCCESS', 'AUTHORIZED', 'SETTLED'];
 
-      if (state === 'COMPLETED' || responseCode === 'SUCCESS') {
-        paymentStatus = 'SUCCESS';
-      } else if (state === 'FAILED' || responseCode === 'FAILURE') {
-        paymentStatus = 'FAILED';
-      }
+    let paymentStatus = 'PENDING';
 
-      console.log('✅ Payment Status:', paymentStatus);
-
-      // Update database
-      const updateResult = await update_payment_status_model(
-        merchantOrderId,
-        paymentStatus,
-        transactionId,
-        payload
-      );
-
-      console.log('📝 Update Result:', updateResult);
-
-      if (updateResult.success && paymentStatus === 'SUCCESS') {
-        await handleSuccessfulPaymentPG(merchantOrderId, payload);
-      }
-
-    } else if (event === 'pg.refund.completed' || event === 'pg.refund.failed') {
-      // Handle refund events
-      console.log('🔄 Refund event received:', event);
-      // Add refund handling logic here
-    } else {
-      console.log('ℹ️  Unknown event type:', event);
+    if (successStates.includes(state) || responseCode === 'SUCCESS') {
+      paymentStatus = 'SUCCESS';
+    } else if (state === 'FAILED' || responseCode === 'FAILURE') {
+      paymentStatus = 'FAILED';
     }
 
-    // ========== STEP 5: Return Success ==========
+    console.log('📊 Final Status:', paymentStatus);
+
+    // 3. DB UPDATE (IMPORTANT FIX)
+    const updateResult = await update_payment_status_model(
+      merchantOrderId,     // ✅ IMPORTANT: ORDER ID use karo
+      paymentStatus,
+      transactionId,
+      payload
+    );
+
+    console.log('📝 DB Update Result:', updateResult);
+
+    // 4. SUCCESS HANDLER
+    if (updateResult.success && paymentStatus === 'SUCCESS') {
+      await handleSuccessfulPaymentPG(merchantOrderId, payload);
+    }
+
     return res.status(200).json({
       success: true,
-      message: "Webhook processed successfully"
+      message: "Webhook processed"
     });
 
   } catch (error) {
     console.error('❌ Webhook Error:', error);
+
     return res.status(200).json({
       success: false,
       message: error.message
@@ -358,27 +430,53 @@ exports.check_status_pg = async (req, res) => {
 };
 
 // ========== HELPER: Handle Successful Payment ==========
+// const handleSuccessfulPaymentPG = async (merchantOrderId, paymentData) => {
+//   try {
+//     console.log('🎉 Processing successful payment:', merchantOrderId);
+
+//     // Get payment details from database
+//     const paymentResult = await get_payment_by_transaction_id_model(merchantOrderId);
+
+//     if (paymentResult.success) {
+//       const payment = paymentResult.data;
+
+//       // Your business logic here:
+//       // 1. Update appointment status
+//       // 2. Send confirmation email
+//       // 3. Create invoice
+//       // 4. Send push notification
+
+//       console.log('✅ Business logic completed for:', merchantOrderId);
+//     } else {
+//       console.error('❌ Payment record not found for business logic');
+//     }
+//   } catch (error) {
+//     console.error('❌ Business logic error:', error);
+//   }
+// };
 const handleSuccessfulPaymentPG = async (merchantOrderId, paymentData) => {
   try {
-    console.log('🎉 Processing successful payment:', merchantOrderId);
 
-    // Get payment details from database
-    const paymentResult = await get_payment_by_transaction_id_model(merchantOrderId);
+    const paymentResult = await get_payment_by_order_id_model(merchantOrderId);
 
-    if (paymentResult.success) {
-      const payment = paymentResult.data;
-
-      // Your business logic here:
-      // 1. Update appointment status
-      // 2. Send confirmation email
-      // 3. Create invoice
-      // 4. Send push notification
-
-      console.log('✅ Business logic completed for:', merchantOrderId);
-    } else {
-      console.error('❌ Payment record not found for business logic');
+    if (!paymentResult.success) {
+      console.error('❌ Payment not found for success handler');
+      return;
     }
+
+    const payment = paymentResult.data;
+
+    // 🔥 BUSINESS LOGIC HERE
+    console.log('✅ Payment Found:', payment.id);
+
+    // Example actions:
+    // - update appointment
+    // - send email
+    // - generate invoice
+
+    console.log('🎯 Business logic completed');
+
   } catch (error) {
-    console.error('❌ Business logic error:', error);
+    console.error('❌ Success handler error:', error);
   }
 };

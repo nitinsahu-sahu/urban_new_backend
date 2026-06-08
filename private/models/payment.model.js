@@ -9,29 +9,100 @@ const {
 } = require("../methods/payment/payment_methods");
 
 
-const create_payment_model = async (user_id, amount, callback_url, metadata = {}, custom_order_id = null) => {
+// const create_payment_model = async (user_id, amount, callback_url, metadata = {}, custom_order_id = null) => {
+//   try {
+//     const created_at = current_epoch_time();
+//     const payment_id = random_number();
+//     const merchant_transaction_id = generate_merchant_transaction_id();
+//     const merchant_order_id = custom_order_id || generate_merchant_order_id();
+//     const amount_in_paise = format_amount_to_paise(amount);
+
+//     const query = `
+//       INSERT INTO paymentsTable (
+//         id, payment_id, user_id, merchant_transaction_id, merchant_order_id,
+//         amount, currency, status, callback_url, metadata, created_at, is_active, is_deleted
+//       ) VALUES (
+//         gen_random_uuid(), $1, $2, $3, $4, $5, 'INR', 'PENDING', $6, $7, $8, true, false
+//       )
+//       RETURNING *;
+//     `;
+
+//     const values = [
+//       payment_id,
+//       user_id,
+//       merchant_transaction_id,
+//       merchant_order_id,  // ✅ Custom order ID support
+//       amount_in_paise,
+//       callback_url,
+//       JSON.stringify(metadata),
+//       created_at
+//     ];
+
+//     const result = await pool.query(query, values);
+
+//     if (result.rows.length > 0) {
+//       return {
+//         success: true,
+//         message: "Payment record created successfully",
+//         data: result.rows[0]
+//       };
+//     } else {
+//       return {
+//         success: false,
+//         message: "Failed to create payment record"
+//       };
+//     }
+//   } catch (error) {
+//     console.error("Error in create_payment_model:", error);
+//     return {
+//       success: false,
+//       error: "An unexpected error occurred while creating payment record"
+//     };
+//   }
+// };
+
+
+const create_payment_model = async (
+  user_id,
+  amount,
+  callback_url,
+  metadata = {},
+  custom_order_id = null
+) => {
   try {
-    const created_at = current_epoch_time();
+
     const payment_id = random_number();
     const merchant_transaction_id = generate_merchant_transaction_id();
     const merchant_order_id = custom_order_id || generate_merchant_order_id();
     const amount_in_paise = format_amount_to_paise(amount);
+    const created_at = Date.now();
 
     const query = `
-      INSERT INTO paymentsTable (
-        id, payment_id, user_id, merchant_transaction_id, merchant_order_id,
-        amount, currency, status, callback_url, metadata, created_at, is_active, is_deleted
-      ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, 'INR', 'PENDING', $6, $7, $8, true, false
+      INSERT INTO paymentstable (
+        payment_id,
+        user_id,
+        merchant_transaction_id,
+        merchant_order_id,
+        amount,
+        currency,
+        status,
+        callback_url,
+        metadata,
+        created_at,
+        is_active,
+        is_deleted
       )
-      RETURNING *;
+      VALUES (
+        $1,$2,$3,$4,$5,'INR','PENDING',$6,$7,$8,true,false
+      )
+      RETURNING *
     `;
 
     const values = [
       payment_id,
       user_id,
       merchant_transaction_id,
-      merchant_order_id,  // ✅ Custom order ID support
+      merchant_order_id,
       amount_in_paise,
       callback_url,
       JSON.stringify(metadata),
@@ -40,23 +111,16 @@ const create_payment_model = async (user_id, amount, callback_url, metadata = {}
 
     const result = await pool.query(query, values);
 
-    if (result.rows.length > 0) {
-      return {
-        success: true,
-        message: "Payment record created successfully",
-        data: result.rows[0]
-      };
-    } else {
-      return {
-        success: false,
-        message: "Failed to create payment record"
-      };
-    }
+    return {
+      success: true,
+      data: result.rows[0]
+    };
+
   } catch (error) {
-    console.error("Error in create_payment_model:", error);
+    console.error(error);
     return {
       success: false,
-      error: "An unexpected error occurred while creating payment record"
+      error: error.message
     };
   }
 };
@@ -93,99 +157,159 @@ const get_payment_by_transaction_id_model = async (merchant_transaction_id) => {
   }
 };
 
-const update_payment_status_model = async (merchant_transaction_id, status, phonepe_transaction_id = null, phonepe_response = null) => {
-  console.log("🔍 merchant_transaction_id:", merchant_transaction_id);
-  console.log("📝 status:", status);
-  console.log("🆔 phonepe_transaction_id:", phonepe_transaction_id);
+// const update_payment_status_model = async (merchant_transaction_id, status, phonepe_transaction_id = null, phonepe_response = null) => {
+
   
+//   try {
+//     const updated_at = current_epoch_time();
+//     const responseJson = phonepe_response ? JSON.stringify(phonepe_response) : null;
+    
+//     // Build query WITHOUT using $1 in CASE statement
+//     // Use separate queries based on status to avoid type conflicts
+//     let query;
+//     let values;
+    
+//     if (status === 'SUCCESS') {
+//       query = `
+//         UPDATE paymentstable 
+//         SET 
+//           status = $1,
+//           phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
+//           phonepe_webhook_response = $3::JSONB,
+//           updated_at = $5,
+//           payment_completed_at = NOW()
+//         WHERE merchant_transaction_id = $4
+//         AND is_active = true 
+//         AND is_deleted = false
+//         RETURNING *
+//       `;
+//     } else {
+//       query = `
+//         UPDATE paymentstable 
+//         SET 
+//           status = $1,
+//           phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
+//           phonepe_webhook_response = $3::JSONB,
+//           updated_at = $5
+//         WHERE merchant_transaction_id = $4
+//         AND is_active = true 
+//         AND is_deleted = false
+//         RETURNING *
+//       `;
+//     }
+    
+//     values = [
+//       status,                    // $1
+//       phonepe_transaction_id,    // $2
+//       responseJson,              // $3
+//       merchant_transaction_id,   // $4
+//       updated_at                 // $5
+//     ];
+
+//     console.log("📤 Query type:", status === 'SUCCESS' ? 'SUCCESS (with payment_completed_at)' : 'Other');
+//     console.log("📤 Values:", values);
+
+//     const result = await pool.query(query, values);
+//     console.log('📥 Rows updated:', result.rows.length);
+
+//     if (result.rows.length > 0) {
+//       console.log("✅ Update successful:", result.rows[0].status);
+//       return {
+//         success: true,
+//         message: "Payment status updated successfully",
+//         data: result.rows[0]
+//       };
+//     } else {
+//       // Check if record exists at all
+//       const checkQuery = `
+//         SELECT id, merchant_transaction_id, status 
+//         FROM paymentstable 
+//         WHERE merchant_transaction_id = $1
+//       `;
+//       const checkResult = await pool.query(checkQuery, [merchant_transaction_id]);
+      
+//       if (checkResult.rows.length === 0) {
+//         console.error("❌ Record not found in database");
+//         return {
+//           success: false,
+//           message: `Payment record not found for ID: ${merchant_transaction_id}`
+//         };
+//       } else {
+//         console.error("❌ Record found but update failed. Current status:", checkResult.rows[0].status);
+//         return {
+//           success: false,
+//           message: "Update failed - record exists but no rows modified"
+//         };
+//       }
+//     }
+//   } catch (error) {
+//     console.error("❌ Error in update_payment_status_model:", error.message);
+//     console.error("❌ Full error:", error);
+//     return {
+//       success: false,
+//       error: error.message || "An unexpected error occurred while updating payment status"
+//     };
+//   }
+// };
+
+const update_payment_status_model = async (
+  merchant_order_id,
+  status,
+  phonepe_transaction_id = null,
+  phonepe_response = null
+) => {
   try {
-    const updated_at = current_epoch_time();
+
+    const updated_at = Date.now();
     const responseJson = phonepe_response ? JSON.stringify(phonepe_response) : null;
-    
-    // Build query WITHOUT using $1 in CASE statement
-    // Use separate queries based on status to avoid type conflicts
-    let query;
-    let values;
-    
-    if (status === 'SUCCESS') {
-      query = `
-        UPDATE paymentstable 
-        SET 
-          status = $1,
-          phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
-          phonepe_webhook_response = $3::JSONB,
-          updated_at = $5,
-          payment_completed_at = NOW()
-        WHERE merchant_transaction_id = $4
-        AND is_active = true 
-        AND is_deleted = false
-        RETURNING *
-      `;
-    } else {
-      query = `
-        UPDATE paymentstable 
-        SET 
-          status = $1,
-          phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
-          phonepe_webhook_response = $3::JSONB,
-          updated_at = $5
-        WHERE merchant_transaction_id = $4
-        AND is_active = true 
-        AND is_deleted = false
-        RETURNING *
-      `;
-    }
-    
-    values = [
-      status,                    // $1
-      phonepe_transaction_id,    // $2
-      responseJson,              // $3
-      merchant_transaction_id,   // $4
-      updated_at                 // $5
+
+    const query = `
+      UPDATE paymentstable
+      SET 
+        status = $1,
+        phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
+        phonepe_webhook_response = $3::jsonb,
+        updated_at = $4,
+        payment_completed_at = CASE 
+          WHEN $1 = 'SUCCESS' THEN NOW()
+          ELSE payment_completed_at
+        END
+      WHERE merchant_order_id = $5
+      AND is_active = true
+      AND is_deleted = false
+      RETURNING *
+    `;
+
+    const values = [
+      status,
+      phonepe_transaction_id,
+      responseJson,
+      updated_at,
+      merchant_order_id
     ];
 
-    console.log("📤 Query type:", status === 'SUCCESS' ? 'SUCCESS (with payment_completed_at)' : 'Other');
-    console.log("📤 Values:", values);
-
     const result = await pool.query(query, values);
-    console.log('📥 Rows updated:', result.rows.length);
 
-    if (result.rows.length > 0) {
-      console.log("✅ Update successful:", result.rows[0].status);
+    if (result.rows.length === 0) {
+      console.error('❌ No record found for order_id:', merchant_order_id);
       return {
-        success: true,
-        message: "Payment status updated successfully",
-        data: result.rows[0]
+        success: false,
+        message: "No payment record found"
       };
-    } else {
-      // Check if record exists at all
-      const checkQuery = `
-        SELECT id, merchant_transaction_id, status 
-        FROM paymentstable 
-        WHERE merchant_transaction_id = $1
-      `;
-      const checkResult = await pool.query(checkQuery, [merchant_transaction_id]);
-      
-      if (checkResult.rows.length === 0) {
-        console.error("❌ Record not found in database");
-        return {
-          success: false,
-          message: `Payment record not found for ID: ${merchant_transaction_id}`
-        };
-      } else {
-        console.error("❌ Record found but update failed. Current status:", checkResult.rows[0].status);
-        return {
-          success: false,
-          message: "Update failed - record exists but no rows modified"
-        };
-      }
     }
+
+    console.log('✅ Payment Updated:', result.rows[0].status);
+
+    return {
+      success: true,
+      data: result.rows[0]
+    };
+
   } catch (error) {
-    console.error("❌ Error in update_payment_status_model:", error.message);
-    console.error("❌ Full error:", error);
+    console.error('❌ Update Error:', error);
     return {
       success: false,
-      error: error.message || "An unexpected error occurred while updating payment status"
+      error: error.message
     };
   }
 };
