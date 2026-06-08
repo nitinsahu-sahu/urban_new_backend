@@ -264,21 +264,21 @@ const update_payment_status_model = async (
     const responseJson = phonepe_response ? JSON.stringify(phonepe_response) : null;
 
     const query = `
-      UPDATE paymentstable
-      SET 
-        status = $1,
-        phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
-        phonepe_webhook_response = $3::jsonb,
-        updated_at = $4,
-        payment_completed_at = CASE 
-          WHEN $1 = 'SUCCESS' THEN NOW()
-          ELSE payment_completed_at
-        END
-      WHERE merchant_order_id = $5
-      AND is_active = true
-      AND is_deleted = false
-      RETURNING *
-    `;
+  UPDATE paymentstable
+  SET 
+    status = $1::varchar,
+    phonepe_transaction_id = COALESCE($2, phonepe_transaction_id),
+    phonepe_webhook_response = $3::jsonb,
+    updated_at = $4,
+    payment_completed_at = CASE 
+      WHEN $1::varchar = 'SUCCESS' THEN NOW()
+      ELSE payment_completed_at
+    END
+  WHERE merchant_order_id = $5
+  AND is_active = true
+  AND is_deleted = false
+  RETURNING *
+`;
 
     const values = [
       status,
@@ -446,9 +446,44 @@ const get_payment_by_id_model = async (payment_id, user_id) => {
   }
 };
 
+const get_payment_by_order_id_model = async (merchant_order_id) => {
+  try {
+
+    const query = `
+      SELECT * 
+      FROM paymentstable
+      WHERE merchant_order_id = $1
+      AND is_active = true
+      AND is_deleted = false
+      LIMIT 1
+    `;
+
+    const result = await pool.query(query, [merchant_order_id]);
+
+    if (result.rows.length === 0) {
+      return {
+        success: false,
+        message: "Payment not found"
+      };
+    }
+
+    return {
+      success: true,
+      data: result.rows[0]
+    };
+
+  } catch (error) {
+    console.error("❌ Get Payment Error:", error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
 module.exports = {
   create_payment_model,
   get_payment_by_transaction_id_model,
+  get_payment_by_order_id_model,
   update_payment_status_model,
   update_payment_refund_model,
   get_user_payments_model,

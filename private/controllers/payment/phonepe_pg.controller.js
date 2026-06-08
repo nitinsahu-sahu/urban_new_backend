@@ -4,7 +4,8 @@ const { sendResponse } = require("../../utils/response");
 const {
   create_payment_model,
   get_payment_by_transaction_id_model,
-  update_payment_status_model
+  update_payment_status_model,
+  get_payment_by_order_id_model
 } = require("../../models/payment.model");
 const {
   generate_merchant_transaction_id,
@@ -76,12 +77,13 @@ const getAuthToken = async () => {
       cachedToken = data.access_token;
       // Set expiry 5 minutes before actual expiry
       tokenExpiry = Date.now() + ((data.expires_in - 300) * 1000);
+      
       return cachedToken;
     } else {
-      throw new Error('Failed to obtain auth token');
+      return sendResponse(res, false, 'Failed to obtain auth token', null, 404);
     }
   } catch (error) {
-    throw error;
+    return sendResponse(res, false, error.message, null, 404);
   }
 };
 
@@ -306,6 +308,8 @@ const verifyWebhookAuth = (req) => {
 //   }
 // };
 exports.handle_webhook_pg = async (req, res) => {
+  console.log('📩 Webhook Received:');
+
   try {
     console.log('📩 Webhook Received:', JSON.stringify(req.body));
 
@@ -466,15 +470,10 @@ const handleSuccessfulPaymentPG = async (merchantOrderId, paymentData) => {
 
     const payment = paymentResult.data;
 
-    // 🔥 BUSINESS LOGIC HERE
-    console.log('✅ Payment Found:', payment.id);
-
     // Example actions:
     // - update appointment
     // - send email
     // - generate invoice
-
-    console.log('🎯 Business logic completed');
 
   } catch (error) {
     console.error('❌ Success handler error:', error);
