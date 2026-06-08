@@ -316,7 +316,7 @@ exports.handle_webhook_pg = async (req, res) => {
       return res.status(200).json({ success: false });
     }
 
-    const { event, payload } = req.body;
+    const { event, payload,type} = req.body;
 
     if (!event || !payload) {
       console.error('❌ Missing event/payload');
@@ -325,19 +325,12 @@ exports.handle_webhook_pg = async (req, res) => {
 
     const {
       merchantOrderId,
-      transactionId,
+      // transactionId,
+      paymentDetails,
       state,
-      responseCode,
+      // responseCode,
       amount
     } = payload;
-
-    console.log('📦 Extracted:', {
-      merchantOrderId,
-      transactionId,
-      state,
-      responseCode,
-      amount
-    });
 
     if (!merchantOrderId) {
       console.error('❌ merchantOrderId missing');
@@ -345,13 +338,11 @@ exports.handle_webhook_pg = async (req, res) => {
     }
 
     // 2. STATUS NORMALIZATION
-    const successStates = ['COMPLETED', 'SUCCESS', 'AUTHORIZED', 'SETTLED'];
-
     let paymentStatus = 'PENDING';
 
-    if (successStates.includes(state) || responseCode === 'SUCCESS') {
+    if (state === 'COMPLETED') {
       paymentStatus = 'SUCCESS';
-    } else if (state === 'FAILED' || responseCode === 'FAILURE') {
+    } else if (state === 'FAILED') {
       paymentStatus = 'FAILED';
     }
 
@@ -359,9 +350,9 @@ exports.handle_webhook_pg = async (req, res) => {
 
     // 3. DB UPDATE (IMPORTANT FIX)
     const updateResult = await update_payment_status_model(
-      merchantOrderId,     // ✅ IMPORTANT: ORDER ID use karo
+      merchantOrderId,
       paymentStatus,
-      transactionId,
+      paymentDetails.transactionId,
       payload
     );
 
