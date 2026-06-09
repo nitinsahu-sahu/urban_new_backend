@@ -6,6 +6,7 @@ const create_products_model = async (
   product_name,
   product_images,
   product_disc,
+  product_key_feature,
   product_sale_price,
   product_actual_price,
   category_id,
@@ -29,7 +30,7 @@ const create_products_model = async (
     const created_at = current_epoch_time();
 
     const query = `INSERT INTO public.products(
-      product_id, product_name, product_disc, product_sale_price, product_actual_price,
+      product_id, product_name, product_disc,product_key_feature, product_sale_price, product_actual_price,
       category_id, expire_date, created_at, brand_id, is_active,
       product_images, product_variants, status, updated_at, updated_by,
       created_by, is_deleted, is_new_flag, is_top_flag, is_sale_flag,
@@ -39,13 +40,14 @@ const create_products_model = async (
       $6, $7, $8, $9, $10,
       $11, $12, $13, $14, $15,
       $16, $17, $18, $19, $20,
-      $21, $22
+      $21, $22, $23
     ) RETURNING *;`;
 
     const values = [
       product_id,
       product_name,
       product_disc,
+      product_key_feature,
       product_sale_price,
       product_actual_price,
       category_id,

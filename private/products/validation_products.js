@@ -12,6 +12,7 @@ const create_products_auth = Joi.object({
   product_name: Joi.string().required(),
   product_images: Joi.array().items(Joi.string().uri()).required(),
   product_disc: Joi.string().required(),
+  product_key_feature: Joi.string().required(),
   product_sale_price: Joi.number().required(),
   product_actual_price: Joi.number().required(),
   category_id: Joi.number().required(),

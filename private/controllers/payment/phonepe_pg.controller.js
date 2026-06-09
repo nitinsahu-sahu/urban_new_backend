@@ -49,7 +49,44 @@ let cachedToken = null;
 let tokenExpiry = null;
 
 // ========== GET OAUTH TOKEN ==========
-const getAuthToken = async () => {
+// const getAuthToken = async () => {
+//   // Return cached token if still valid
+//   if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
+//     return cachedToken;
+//   }
+
+//   try {
+//     const urls = getApiUrls();
+
+//     const formData = new URLSearchParams();
+//     formData.append('client_id', PHONEPE_CONFIG.clientId);
+//     formData.append('client_version', PHONEPE_CONFIG.clientVersion.toString());
+//     formData.append('client_secret', PHONEPE_CONFIG.clientSecret);
+//     formData.append('grant_type', 'client_credentials');
+
+//     const response = await fetch(urls.token, {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/x-www-form-urlencoded',
+//       },
+//       body: formData.toString()
+//     });
+
+//     const data = await response.json();
+//     if (data.access_token) {
+//       cachedToken = data.access_token;
+//       // Set expiry 5 minutes before actual expiry
+//       tokenExpiry = Date.now() + ((data.expires_in - 300) * 1000);
+//       return cachedToken;
+//     } else {
+//       return sendResponse(res, false, 'Failed to obtain auth token', null, 404);
+//     }
+//   } catch (error) {
+//     return sendResponse(res, false, error.message, null, 404);
+//   }
+// };
+// ========== GET OAUTH TOKEN ==========
+const getAuthToken = async (res) => {
   // Return cached token if still valid
   if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
     return cachedToken;
@@ -72,20 +109,130 @@ const getAuthToken = async () => {
       body: formData.toString()
     });
 
-    const data = await response.json();
+    // FIX: Properly read the response
+    const responseText = await response.text();
+    console.log("Token response:", responseText);
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('❌ Failed to parse token response:', parseError);
+      if (res) {
+        sendResponse(res, false, 'Failed to parse auth token response', null, 500);
+      }
+      return null;
+    }
+
     if (data.access_token) {
       cachedToken = data.access_token;
       // Set expiry 5 minutes before actual expiry
       tokenExpiry = Date.now() + ((data.expires_in - 300) * 1000);
       return cachedToken;
     } else {
-      return sendResponse(res, false, 'Failed to obtain auth token', null, 404);
+      console.error('❌ No access token in response:', data);
+      if (res) {
+        sendResponse(res, false, 'Failed to obtain auth token', data, 500);
+      }
+      return null;
     }
   } catch (error) {
-    return sendResponse(res, false, error.message, null, 404);
+    console.error('❌ Token fetch error:', error);
+    if (res) {
+      sendResponse(res, false, error.message, null, 500);
+    }
+    return null;
   }
 };
+// ========== API 1: INITIATE PAYMENT ==========
+// exports.initiate_payment_pg = async (req, res) => {
+//   try {
+//     const { userId, amount, orderId } = req.body;
+//     const user = req.user;
 
+//     if (!amount || amount <= 0) {
+//       return sendResponse(res, false, "Invalid amount", null, 400);
+//     }
+
+//     // Generate merchant order ID
+//     const merchantOrderId = orderId || generate_merchant_transaction_id();
+
+//     // Step 1: Get Auth Token
+//     const authToken = await getAuthToken();
+
+//     // Step 2: Create PhonePe Order Payload (v2 format)
+//     const phonepePayload = {
+//       merchantOrderId: merchantOrderId,
+//       amount: format_amount_to_paise(amount),
+//       expireAfter: 1800, // 30 minutes in seconds
+//       metaInfo: {
+//         udf1: userId,
+//         udf2: user?.mobile_number || '',
+//         udf3: 'PG_Direct_Payment'
+//       },
+//       paymentFlow: {
+//         type: "PG_CHECKOUT"
+//       }
+//     };
+// console.log('phonepePayload',phonepePayload);
+
+//     // Step 3: Save to Database first
+//     const paymentResult = await create_payment_model(
+//       userId,
+//       amount,
+//       process.env.PHONEPE_CALLBACK_URL,
+//       {
+//         orderId: orderId,
+//         purpose: 'PG Direct Payment',
+//         merchantOrderId: merchantOrderId
+//       },
+//       merchantOrderId
+//     );
+
+//     if (!paymentResult.success) {
+//       return sendResponse(res, false, "Failed to create payment record", null, 500);
+//     }
+
+//     // Step 4: Call PhonePe API to create order
+//     const urls = getApiUrls();
+
+//     const response = await fetch(urls.order, {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//         'Authorization': `O-Bearer ${authToken}`,
+//       },
+//       body: JSON.stringify(phonepePayload)
+//     });
+//     console.log("==>",response);
+//     console.log("authToken",authToken);
+    
+//     const orderData = await response.json();
+
+//     if (response.ok && orderData.orderId) {
+//       await update_payment_status_model(
+//         merchantOrderId,
+//         orderData.state || 'PENDING',
+//         merchantOrderId,
+//         orderData
+//       );
+
+//       return sendResponse(res, true, "Payment initiated successfully", {
+//         orderToken: orderData.token,
+//         merchantOrderId: merchantOrderId,
+//         amount: amount,
+//         redirectUrl: orderData.data?.redirectUrl || null,
+//         orderData: orderData.data
+//       }, 200);
+//     } else {
+//       console.error('❌ Order creation failed:', orderData);
+//       return sendResponse(res, false, orderData.message || "Payment initiation failed", orderData, 400);
+//     }
+
+//   } catch (error) {
+//     return sendResponse(res, false, error.message, null, 500);
+//   }
+// };
 // ========== API 1: INITIATE PAYMENT ==========
 exports.initiate_payment_pg = async (req, res) => {
   try {
@@ -99,8 +246,13 @@ exports.initiate_payment_pg = async (req, res) => {
     // Generate merchant order ID
     const merchantOrderId = orderId || generate_merchant_transaction_id();
 
-    // Step 1: Get Auth Token
-    const authToken = await getAuthToken();
+    // Step 1: Get Auth Token - FIX: Pass res properly
+    const authToken = await getAuthToken(res);
+    
+    // Check if auth token retrieval failed
+    if (!authToken) {
+      return; // getAuthToken already sent the error response
+    }
 
     // Step 2: Create PhonePe Order Payload (v2 format)
     const phonepePayload = {
@@ -116,6 +268,7 @@ exports.initiate_payment_pg = async (req, res) => {
         type: "PG_CHECKOUT"
       }
     };
+    console.log('phonepePayload', phonepePayload);
 
     // Step 3: Save to Database first
     const paymentResult = await create_payment_model(
@@ -129,7 +282,6 @@ exports.initiate_payment_pg = async (req, res) => {
       },
       merchantOrderId
     );
-console.log("paymentResult",paymentResult);
 
     if (!paymentResult.success) {
       return sendResponse(res, false, "Failed to create payment record", null, 500);
@@ -146,10 +298,26 @@ console.log("paymentResult",paymentResult);
       },
       body: JSON.stringify(phonepePayload)
     });
-    const orderData = await response.json();
+    
+    console.log("Response status:", response.status);
+    console.log("Response ok:", response.ok);
+    console.log("authToken:", authToken);
+    
+    // FIX: Properly read the response body
+    const responseText = await response.text();
+    console.log("Response body:", responseText);
+    
+    let orderData;
+    try {
+      orderData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('❌ Failed to parse response:', parseError);
+      return sendResponse(res, false, "Invalid response from PhonePe", { responseText }, 500);
+    }
+    
+    console.log("Parsed orderData:", orderData);
 
     if (response.ok && orderData.orderId) {
-      // Step 5: Update payment with transaction ID
       await update_payment_status_model(
         merchantOrderId,
         orderData.state || 'PENDING',
@@ -158,11 +326,11 @@ console.log("paymentResult",paymentResult);
       );
 
       return sendResponse(res, true, "Payment initiated successfully", {
-        orderToken: orderData.token,
+        orderToken: orderData.token || orderData.data?.token,
         merchantOrderId: merchantOrderId,
         amount: amount,
         redirectUrl: orderData.data?.redirectUrl || null,
-        orderData: orderData.data
+        orderData: orderData.data || orderData
       }, 200);
     } else {
       console.error('❌ Order creation failed:', orderData);
@@ -170,10 +338,10 @@ console.log("paymentResult",paymentResult);
     }
 
   } catch (error) {
+    console.error('❌ Unexpected error:', error);
     return sendResponse(res, false, error.message, null, 500);
   }
 };
-
 // ========== VERIFY WEBHOOK AUTHORIZATION ==========
 const verifyWebhookAuth = (req) => {
   try {
@@ -201,111 +369,7 @@ const verifyWebhookAuth = (req) => {
 };
 
 // ========== API 2: WEBHOOK (Callback from PhonePe) ==========
-// exports.handle_webhook_pg = async (req, res) => {
-//   const {
-//     merchantOrderId,
-//     transactionId,
-//     state,
-//     responseCode,
-//     amount
-//   } = payload;
-//   try {
-//     // ========== STEP 1: Verify Authorization ==========
-//     if (!verifyWebhookAuth(req)) {
-//       console.error('❌ Webhook authorization failed');
-//       return res.status(200).json({
-//         success: false,
-//         message: "Authorization failed"
-//       });
-//     }
-
-//     // ========== STEP 2: Extract Event Type ==========
-//     const event = req.body.event;
-//     const timestamp = req.body.timestamp;
-
-//     // PhonePe events:
-//     // - checkout.order.completed
-//     // - checkout.order.failed
-//     // - pg.refund.completed
-//     // - pg.refund.failed
-
-//     if (!event) {
-//       console.error('❌ No event type in webhook');
-//       return res.status(200).json({ success: false });
-//     }
-
-//     // ========== STEP 3: Extract Payload ==========
-//     const payload = req.body.payload;
-
-//     if (!payload) {
-//       console.error();
-//       return res.status(200).json({ success: false, message: "'❌ No payload in webhook'" });
-//     }
-
-//     const {
-//       merchantOrderId,
-//       transactionId,
-//       state,
-//       responseCode,
-//       amount
-//     } = payload;
-
-//     if (!merchantOrderId) {
-//       console.error('❌ No merchantOrderId in payload');
-//       return res.status(200).json({ success: false });
-//     }
-
-//     // ========== STEP 4: Handle Different Events ==========
-//     if (event === 'checkout.order.completed' || event === 'checkout.order.failed') {
-//       // Payment status update
-//       let paymentStatus = 'PENDING';
-
-//       if (state === 'COMPLETED' || responseCode === 'SUCCESS') {
-//         paymentStatus = 'SUCCESS';
-//       } else if (state === 'FAILED' || responseCode === 'FAILURE') {
-//         paymentStatus = 'FAILED';
-//       }
-
-//       console.log('✅ Payment Status:', paymentStatus);
-
-//       // Update database
-//       const updateResult = await update_payment_status_model(
-//         merchantOrderId,
-//         paymentStatus,
-//         transactionId,
-//         payload
-//       );
-
-//       console.log('📝 Update Result:', updateResult);
-
-//       if (updateResult.success && paymentStatus === 'SUCCESS') {
-//         await handleSuccessfulPaymentPG(merchantOrderId, payload);
-//       }
-
-//     } else if (event === 'pg.refund.completed' || event === 'pg.refund.failed') {
-//       // Handle refund events
-//       console.log('🔄 Refund event received:', event);
-//       // Add refund handling logic here
-//     } else {
-//       console.log('ℹ️  Unknown event type:', event);
-//     }
-
-//     // ========== STEP 5: Return Success ==========
-//     return res.status(200).json({
-//       success: true,
-//       message: "Webhook processed successfully"
-//     });
-
-//   } catch (error) {
-//     console.error('❌ Webhook Error:', error);
-//     return res.status(200).json({
-//       success: false,
-//       message: error.message
-//     });
-//   }
-// };
 exports.handle_webhook_pg = async (req, res) => {
-  console.log('📩 Webhook Received:');
 
   try {
     console.log('📩 Webhook Received:', JSON.stringify(req.body));
@@ -316,7 +380,7 @@ exports.handle_webhook_pg = async (req, res) => {
       return res.status(200).json({ success: false });
     }
 
-    const { event, payload,type} = req.body;
+    const { event, payload, type} = req.body;
 
     if (!event || !payload) {
       console.error('❌ Missing event/payload');
@@ -325,16 +389,25 @@ exports.handle_webhook_pg = async (req, res) => {
 
     const {
       merchantOrderId,
-      // transactionId,
-      paymentDetails,
+      paymentDetails, 
       state,
-      // responseCode,
       amount
     } = payload;
-
+console.log('🔍 Type of paymentDetails:', typeof paymentDetails);
+console.log('🔍 Is Array?', Array.isArray(paymentDetails));
+console.log('🔍 Full paymentDetails:', JSON.stringify(paymentDetails, null, 2));
     if (!merchantOrderId) {
       console.error('❌ merchantOrderId missing');
       return res.status(200).json({ success: false });
+    }
+
+    // ✅ FIX: Extract transactionId from array
+    let transactionId = null;
+    if (paymentDetails && Array.isArray(paymentDetails) && paymentDetails.length > 0) {
+      transactionId = paymentDetails[0].transactionId;
+      console.log('✅ Extracted transactionId:', transactionId);
+    } else {
+      console.log('⚠️ paymentDetails is not an array or empty:', paymentDetails);
     }
 
     // 2. STATUS NORMALIZATION
@@ -348,11 +421,11 @@ exports.handle_webhook_pg = async (req, res) => {
 
     console.log('📊 Final Status:', paymentStatus);
 
-    // 3. DB UPDATE (IMPORTANT FIX)
+    // 3. DB UPDATE - Pass correct transactionId
     const updateResult = await update_payment_status_model(
       merchantOrderId,
       paymentStatus,
-      paymentDetails.transactionId,
+      transactionId,
       payload
     );
 
@@ -375,6 +448,29 @@ exports.handle_webhook_pg = async (req, res) => {
       success: false,
       message: error.message
     });
+  }
+};
+
+// ========== HELPER: Handle Successful Payment ==========
+const handleSuccessfulPaymentPG = async (merchantOrderId, paymentData) => {
+  try {
+
+    const paymentResult = await get_payment_by_order_id_model(merchantOrderId);
+
+    if (!paymentResult.success) {
+      console.error('❌ Payment not found for success handler');
+      return;
+    }
+
+    const payment = paymentResult.data;
+
+    // Example actions:
+    // - update appointment
+    // - send email
+    // - generate invoice
+
+  } catch (error) {
+    console.error('❌ Success handler error:', error);
   }
 };
 
@@ -421,49 +517,3 @@ exports.check_status_pg = async (req, res) => {
   }
 };
 
-// ========== HELPER: Handle Successful Payment ==========
-// const handleSuccessfulPaymentPG = async (merchantOrderId, paymentData) => {
-//   try {
-//     console.log('🎉 Processing successful payment:', merchantOrderId);
-
-//     // Get payment details from database
-//     const paymentResult = await get_payment_by_transaction_id_model(merchantOrderId);
-
-//     if (paymentResult.success) {
-//       const payment = paymentResult.data;
-
-//       // Your business logic here:
-//       // 1. Update appointment status
-//       // 2. Send confirmation email
-//       // 3. Create invoice
-//       // 4. Send push notification
-
-//       console.log('✅ Business logic completed for:', merchantOrderId);
-//     } else {
-//       console.error('❌ Payment record not found for business logic');
-//     }
-//   } catch (error) {
-//     console.error('❌ Business logic error:', error);
-//   }
-// };
-const handleSuccessfulPaymentPG = async (merchantOrderId, paymentData) => {
-  try {
-
-    const paymentResult = await get_payment_by_order_id_model(merchantOrderId);
-
-    if (!paymentResult.success) {
-      console.error('❌ Payment not found for success handler');
-      return;
-    }
-
-    const payment = paymentResult.data;
-
-    // Example actions:
-    // - update appointment
-    // - send email
-    // - generate invoice
-
-  } catch (error) {
-    console.error('❌ Success handler error:', error);
-  }
-};
