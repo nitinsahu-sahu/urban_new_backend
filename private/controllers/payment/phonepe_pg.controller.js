@@ -112,7 +112,7 @@ const getAuthToken = async (res) => {
     // FIX: Properly read the response
     const responseText = await response.text();
     console.log("Token response:", responseText);
-    
+
     let data;
     try {
       data = JSON.parse(responseText);
@@ -206,7 +206,7 @@ const getAuthToken = async (res) => {
 //     });
 //     console.log("==>",response);
 //     console.log("authToken",authToken);
-    
+
 //     const orderData = await response.json();
 
 //     if (response.ok && orderData.orderId) {
@@ -248,7 +248,7 @@ exports.initiate_payment_pg = async (req, res) => {
 
     // Step 1: Get Auth Token - FIX: Pass res properly
     const authToken = await getAuthToken(res);
-    
+
     // Check if auth token retrieval failed
     if (!authToken) {
       return; // getAuthToken already sent the error response
@@ -298,15 +298,15 @@ exports.initiate_payment_pg = async (req, res) => {
       },
       body: JSON.stringify(phonepePayload)
     });
-    
+
     console.log("Response status:", response.status);
     console.log("Response ok:", response.ok);
     console.log("authToken:", authToken);
-    
+
     // FIX: Properly read the response body
     const responseText = await response.text();
     console.log("Response body:", responseText);
-    
+
     let orderData;
     try {
       orderData = JSON.parse(responseText);
@@ -314,7 +314,7 @@ exports.initiate_payment_pg = async (req, res) => {
       console.error('❌ Failed to parse response:', parseError);
       return sendResponse(res, false, "Invalid response from PhonePe", { responseText }, 500);
     }
-    
+
     console.log("Parsed orderData:", orderData);
 
     if (response.ok && orderData.orderId) {
@@ -343,59 +343,59 @@ exports.initiate_payment_pg = async (req, res) => {
   }
 };
 // ========== VERIFY WEBHOOK AUTHORIZATION ==========
+
 const verifyWebhookAuth = (req) => {
   try {
     const authHeader = req.headers['authorization'];
 
     if (!authHeader) {
-      console.error('❌ No Authorization header in webhook');
       return false;
     }
 
-    // PhonePe sends: SHA256(username:password)
-    const expectedAuth = `SHA256(${WEBHOOK_CONFIG.username}:${WEBHOOK_CONFIG.password})`;
+    // Generate SHA256(username:password) - exactly as PhonePe does
+    const authString = `${WEBHOOK_CONFIG.username}:${WEBHOOK_CONFIG.password}`;
+    const expectedHash = crypto
+      .createHash('sha256')
+      .update(authString)
+      .digest('hex');
 
-    if (authHeader === expectedAuth) {
+    const expectedAuth = `SHA256(${authString})`;
+
+    // Try both formats (PhonePe sometimes sends just hash, sometimes with wrapper)
+    if (authHeader === expectedAuth || authHeader === expectedHash) {
       console.log('✅ Webhook authorization verified');
       return true;
-    } else {
-      console.error('❌ Invalid authorization');
-      return false;
     }
+
+    return false;
+
   } catch (error) {
-    console.error('❌ Auth verification error:', error);
     return false;
   }
 };
 
 // ========== API 2: WEBHOOK (Callback from PhonePe) ==========
 exports.handle_webhook_pg = async (req, res) => {
+console.log("1. body",req.body);
 
   try {
-    console.log('📩 Webhook Received:', JSON.stringify(req.body));
-
     // 1. AUTH CHECK
     if (!verifyWebhookAuth(req)) {
-      console.error('❌ Invalid webhook signature');
       return res.status(200).json({ success: false });
     }
 
-    const { event, payload, type} = req.body;
+    const { event, payload, type } = req.body;
 
-    if (!event || !payload) {
-      console.error('❌ Missing event/payload');
-      return res.status(200).json({ success: false });
-    }
 
     const {
       merchantOrderId,
-      paymentDetails, 
+      paymentDetails,
       state,
       amount
     } = payload;
-console.log('🔍 Type of paymentDetails:', typeof paymentDetails);
-console.log('🔍 Is Array?', Array.isArray(paymentDetails));
-console.log('🔍 Full paymentDetails:', JSON.stringify(paymentDetails, null, 2));
+    console.log('🔍 Type of paymentDetails:', typeof paymentDetails);
+    console.log('🔍 Is Array?', Array.isArray(paymentDetails));
+    console.log('🔍 Full paymentDetails:', JSON.stringify(paymentDetails, null, 2));
     if (!merchantOrderId) {
       console.error('❌ merchantOrderId missing');
       return res.status(200).json({ success: false });
