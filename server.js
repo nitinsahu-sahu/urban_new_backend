@@ -16,7 +16,13 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf, encoding) => {
+    req.rawBody = buf.toString();
+  },
+  limit: '10mb'
+}));
+// app.use(express.json());
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 

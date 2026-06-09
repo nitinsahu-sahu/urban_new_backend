@@ -49,43 +49,6 @@ let cachedToken = null;
 let tokenExpiry = null;
 
 // ========== GET OAUTH TOKEN ==========
-// const getAuthToken = async () => {
-//   // Return cached token if still valid
-//   if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
-//     return cachedToken;
-//   }
-
-//   try {
-//     const urls = getApiUrls();
-
-//     const formData = new URLSearchParams();
-//     formData.append('client_id', PHONEPE_CONFIG.clientId);
-//     formData.append('client_version', PHONEPE_CONFIG.clientVersion.toString());
-//     formData.append('client_secret', PHONEPE_CONFIG.clientSecret);
-//     formData.append('grant_type', 'client_credentials');
-
-//     const response = await fetch(urls.token, {
-//       method: 'POST',
-//       headers: {
-//         'Content-Type': 'application/x-www-form-urlencoded',
-//       },
-//       body: formData.toString()
-//     });
-
-//     const data = await response.json();
-//     if (data.access_token) {
-//       cachedToken = data.access_token;
-//       // Set expiry 5 minutes before actual expiry
-//       tokenExpiry = Date.now() + ((data.expires_in - 300) * 1000);
-//       return cachedToken;
-//     } else {
-//       return sendResponse(res, false, 'Failed to obtain auth token', null, 404);
-//     }
-//   } catch (error) {
-//     return sendResponse(res, false, error.message, null, 404);
-//   }
-// };
-// ========== GET OAUTH TOKEN ==========
 const getAuthToken = async (res) => {
   // Return cached token if still valid
   if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
@@ -144,95 +107,7 @@ const getAuthToken = async (res) => {
     return null;
   }
 };
-// ========== API 1: INITIATE PAYMENT ==========
-// exports.initiate_payment_pg = async (req, res) => {
-//   try {
-//     const { userId, amount, orderId } = req.body;
-//     const user = req.user;
 
-//     if (!amount || amount <= 0) {
-//       return sendResponse(res, false, "Invalid amount", null, 400);
-//     }
-
-//     // Generate merchant order ID
-//     const merchantOrderId = orderId || generate_merchant_transaction_id();
-
-//     // Step 1: Get Auth Token
-//     const authToken = await getAuthToken();
-
-//     // Step 2: Create PhonePe Order Payload (v2 format)
-//     const phonepePayload = {
-//       merchantOrderId: merchantOrderId,
-//       amount: format_amount_to_paise(amount),
-//       expireAfter: 1800, // 30 minutes in seconds
-//       metaInfo: {
-//         udf1: userId,
-//         udf2: user?.mobile_number || '',
-//         udf3: 'PG_Direct_Payment'
-//       },
-//       paymentFlow: {
-//         type: "PG_CHECKOUT"
-//       }
-//     };
-// console.log('phonepePayload',phonepePayload);
-
-//     // Step 3: Save to Database first
-//     const paymentResult = await create_payment_model(
-//       userId,
-//       amount,
-//       process.env.PHONEPE_CALLBACK_URL,
-//       {
-//         orderId: orderId,
-//         purpose: 'PG Direct Payment',
-//         merchantOrderId: merchantOrderId
-//       },
-//       merchantOrderId
-//     );
-
-//     if (!paymentResult.success) {
-//       return sendResponse(res, false, "Failed to create payment record", null, 500);
-//     }
-
-//     // Step 4: Call PhonePe API to create order
-//     const urls = getApiUrls();
-
-//     const response = await fetch(urls.order, {
-//       method: 'POST',
-//       headers: {
-//         'Content-Type': 'application/json',
-//         'Authorization': `O-Bearer ${authToken}`,
-//       },
-//       body: JSON.stringify(phonepePayload)
-//     });
-//     console.log("==>",response);
-//     console.log("authToken",authToken);
-
-//     const orderData = await response.json();
-
-//     if (response.ok && orderData.orderId) {
-//       await update_payment_status_model(
-//         merchantOrderId,
-//         orderData.state || 'PENDING',
-//         merchantOrderId,
-//         orderData
-//       );
-
-//       return sendResponse(res, true, "Payment initiated successfully", {
-//         orderToken: orderData.token,
-//         merchantOrderId: merchantOrderId,
-//         amount: amount,
-//         redirectUrl: orderData.data?.redirectUrl || null,
-//         orderData: orderData.data
-//       }, 200);
-//     } else {
-//       console.error('❌ Order creation failed:', orderData);
-//       return sendResponse(res, false, orderData.message || "Payment initiation failed", orderData, 400);
-//     }
-
-//   } catch (error) {
-//     return sendResponse(res, false, error.message, null, 500);
-//   }
-// };
 // ========== API 1: INITIATE PAYMENT ==========
 exports.initiate_payment_pg = async (req, res) => {
   try {
@@ -342,8 +217,8 @@ exports.initiate_payment_pg = async (req, res) => {
     return sendResponse(res, false, error.message, null, 500);
   }
 };
-// ========== VERIFY WEBHOOK AUTHORIZATION ==========
 
+// ========== VERIFY WEBHOOK AUTHORIZATION ==========
 const verifyWebhookAuth = (req) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -375,81 +250,250 @@ const verifyWebhookAuth = (req) => {
 };
 
 // ========== API 2: WEBHOOK (Callback from PhonePe) ==========
-exports.handle_webhook_pg = async (req, res) => {
-console.log("1. body",req.body);
+// exports.handle_webhook_pg = async (req, res) => {
+// console.log("1. body",req.body);
 
+//   try {
+//     // 1. AUTH CHECK
+//     if (!verifyWebhookAuth(req)) {
+//       return res.status(200).json({ success: false });
+//     }
+
+//     const { event, payload, type } = req.body;
+
+
+//     const {
+//       merchantOrderId,
+//       paymentDetails,
+//       state,
+//       amount
+//     } = payload;
+//     if (!merchantOrderId) {
+//       console.error('❌ merchantOrderId missing');
+//       return res.status(200).json({ success: false });
+//     }
+
+//     // ✅ FIX: Extract transactionId from array
+//     let transactionId = null;
+//     if (paymentDetails && Array.isArray(paymentDetails) && paymentDetails.length > 0) {
+//       transactionId = paymentDetails[0].transactionId;
+//       console.log('✅ Extracted transactionId:', transactionId);
+//     } else {
+//       console.log('⚠️ paymentDetails is not an array or empty:', paymentDetails);
+//     }
+
+//     // 2. STATUS NORMALIZATION
+//     let paymentStatus = 'PENDING';
+
+//     if (state === 'COMPLETED') {
+//       paymentStatus = 'SUCCESS';
+//     } else if (state === 'FAILED') {
+//       paymentStatus = 'FAILED';
+//     }
+
+//     console.log('📊 Final Status:', paymentStatus);
+
+//     // 3. DB UPDATE - Pass correct transactionId
+//     const updateResult = await update_payment_status_model(
+//       merchantOrderId,
+//       paymentStatus,
+//       transactionId,
+//       payload
+//     );
+
+//     console.log('📝 DB Update Result:', updateResult);
+
+//     // 4. SUCCESS HANDLER
+//     if (updateResult.success && paymentStatus === 'SUCCESS') {
+//       await handleSuccessfulPaymentPG(merchantOrderId, payload);
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Webhook processed"
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Webhook Error:', error);
+
+//     return res.status(200).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// };
+exports.handle_webhook_pg = async (req, res) => {
+  console.log("📨 Webhook received at:", new Date().toISOString());
+  console.log("📦 Raw Body:", JSON.stringify(req.body, null, 2));
+  
   try {
     // 1. AUTH CHECK
     if (!verifyWebhookAuth(req)) {
-      return res.status(200).json({ success: false });
+      console.error('❌ Webhook auth verification failed');
+      return res.status(200).json({ success: false, message: "Auth failed" });
     }
 
-    const { event, payload, type } = req.body;
+    // 2. EXTRACT DATA - Handle multiple possible structures
+    let webhookData = req.body;
+    
+    // Case 1: Direct payload structure
+    if (webhookData.payload && typeof webhookData.payload === 'object') {
+      var { event, payload } = webhookData;
+    }
+    // Case 2: Data wrapped inside another object
+    else if (webhookData.data && webhookData.data.payload) {
+      var { event, payload } = webhookData.data;
+    }
+    // Case 3: No wrapper, direct structure
+    else if (webhookData.event && (webhookData.merchantOrderId || webhookData.payload)) {
+      var event = webhookData.event;
+      var payload = webhookData.payload || webhookData;
+    }
+    // Case 4: Fallback - treat entire body as payload
+    else {
+      console.log("⚠️ Using fallback - treating entire body as payload");
+      var event = webhookData.event;
+      var payload = webhookData;
+    }
 
+    console.log("✅ Parsed Event:", event);
+    console.log("✅ Parsed Payload Keys:", payload ? Object.keys(payload) : "No payload");
 
-    const {
-      merchantOrderId,
-      paymentDetails,
-      state,
-      amount
-    } = payload;
-    console.log('🔍 Type of paymentDetails:', typeof paymentDetails);
-    console.log('🔍 Is Array?', Array.isArray(paymentDetails));
-    console.log('🔍 Full paymentDetails:', JSON.stringify(paymentDetails, null, 2));
+    // 3. SAFELY EXTRACT REQUIRED FIELDS with multiple fallbacks
+    const merchantOrderId = payload?.merchantOrderId 
+      || webhookData.merchantOrderId 
+      || payload?.merchantOrderId 
+      || req.body.merchantOrderId;
+    
+    const state = payload?.state 
+      || webhookData.state 
+      || req.body.state;
+    
+    const amount = payload?.amount 
+      || webhookData.amount 
+      || req.body.amount;
+    
+    let paymentDetails = payload?.paymentDetails 
+      || webhookData.paymentDetails 
+      || req.body.paymentDetails;
+    
+    // 4. HANDLE paymentDetails if it's a string (JSON stringified)
+    if (paymentDetails && typeof paymentDetails === 'string') {
+      try {
+        paymentDetails = JSON.parse(paymentDetails);
+        console.log("✅ Parsed paymentDetails from string");
+      } catch (e) {
+        console.error("❌ Failed to parse paymentDetails string:", e.message);
+      }
+    }
+
+    // 5. VALIDATE merchantOrderId
     if (!merchantOrderId) {
-      console.error('❌ merchantOrderId missing');
-      return res.status(200).json({ success: false });
+      console.error('❌ merchantOrderId missing in webhook');
+      console.error('Full webhook data:', JSON.stringify(req.body, null, 2));
+      return res.status(200).json({ 
+        success: false, 
+        message: "merchantOrderId missing",
+        receivedData: req.body 
+      });
     }
 
-    // ✅ FIX: Extract transactionId from array
+    console.log(`✅ Processing order: ${merchantOrderId}`);
+    console.log(`📊 Order State: ${state}`);
+    console.log(`💰 Amount: ${amount}`);
+
+    // 6. EXTRACT TRANSACTION ID safely
     let transactionId = null;
     if (paymentDetails && Array.isArray(paymentDetails) && paymentDetails.length > 0) {
-      transactionId = paymentDetails[0].transactionId;
+      transactionId = paymentDetails[0].transactionId || paymentDetails[0].transaction_id;
       console.log('✅ Extracted transactionId:', transactionId);
+      console.log('✅ Payment Mode:', paymentDetails[0].paymentMode);
+      console.log('✅ Payment State:', paymentDetails[0].state);
+    } else if (paymentDetails && typeof paymentDetails === 'object' && !Array.isArray(paymentDetails)) {
+      // Handle case where paymentDetails is an object, not array
+      transactionId = paymentDetails.transactionId || paymentDetails.transaction_id;
+      console.log('✅ Extracted transactionId from object:', transactionId);
     } else {
-      console.log('⚠️ paymentDetails is not an array or empty:', paymentDetails);
+      console.log('⚠️ No paymentDetails found or invalid format');
     }
 
-    // 2. STATUS NORMALIZATION
+    // 7. DETERMINE PAYMENT STATUS
     let paymentStatus = 'PENDING';
-
-    if (state === 'COMPLETED') {
+    
+    if (state === 'COMPLETED' || state === 'SUCCESS' || state === 'SUCCESSFUL') {
       paymentStatus = 'SUCCESS';
-    } else if (state === 'FAILED') {
+    } else if (state === 'FAILED' || state === 'FAILURE' || state === 'ERROR') {
       paymentStatus = 'FAILED';
+    } else if (state === 'PENDING' || state === 'INITIATED') {
+      paymentStatus = 'PENDING';
     }
 
-    console.log('📊 Final Status:', paymentStatus);
+    console.log('📊 Final Payment Status:', paymentStatus);
 
-    // 3. DB UPDATE - Pass correct transactionId
+    // 8. CHECK FOR DUPLICATE WEBHOOK
+    const isDuplicate = await checkDuplicateWebhook(merchantOrderId, transactionId);
+    if (isDuplicate) {
+      console.log(`⚠️ Duplicate webhook received for order: ${merchantOrderId}`);
+      return res.status(200).json({ 
+        success: true, 
+        message: "Duplicate webhook ignored" 
+      });
+    }
+
+    // 9. UPDATE DATABASE
     const updateResult = await update_payment_status_model(
       merchantOrderId,
       paymentStatus,
       transactionId,
-      payload
+      payload || webhookData
     );
 
     console.log('📝 DB Update Result:', updateResult);
 
-    // 4. SUCCESS HANDLER
+    // 10. HANDLE SUCCESSFUL PAYMENT
     if (updateResult.success && paymentStatus === 'SUCCESS') {
-      await handleSuccessfulPaymentPG(merchantOrderId, payload);
+      try {
+        await handleSuccessfulPaymentPG(merchantOrderId, payload || webhookData);
+        console.log(`✅ Success handler executed for order: ${merchantOrderId}`);
+      } catch (successHandlerError) {
+        console.error(`❌ Success handler failed for order ${merchantOrderId}:`, successHandlerError);
+        // Don't return error, webhook already processed
+      }
     }
 
+    // 11. RETURN SUCCESS RESPONSE
     return res.status(200).json({
       success: true,
-      message: "Webhook processed"
+      message: "Webhook processed successfully",
+      orderId: merchantOrderId,
+      status: paymentStatus
     });
 
   } catch (error) {
-    console.error('❌ Webhook Error:', error);
-
+    console.error('❌ Webhook Processing Error:', error);
+    console.error('Error Stack:', error.stack);
+    
+    // Always return 200 to PhonePe to prevent retries
     return res.status(200).json({
       success: false,
-      message: error.message
+      message: error.message,
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
+
+// Helper function to check duplicate webhooks
+async function checkDuplicateWebhook(merchantOrderId, transactionId) {
+  try {
+    // You need to implement this based on your database
+    // Example: Check if this order already has a webhook processed
+    const existingWebhook = await check_webhook_processed_model(merchantOrderId, transactionId);
+    return existingWebhook && existingWebhook.processed === true;
+  } catch (error) {
+    console.error('Error checking duplicate webhook:', error);
+    return false; // Assume not duplicate if check fails
+  }
+}
 
 // ========== HELPER: Handle Successful Payment ==========
 const handleSuccessfulPaymentPG = async (merchantOrderId, paymentData) => {
