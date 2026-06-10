@@ -142,7 +142,7 @@ const verifyWebhookAuth = (req) => {
 // ========== API 1: INITIATE PAYMENT ==========
 exports.initiate_payment_pg = async (req, res) => {
   try {
-    const { userId, amount, orderId, merchantOrderId } = req.body;
+    const { userId, amount, orderId } = req.body;
     const user = req.user;
 
     if (!amount || amount <= 0) {
@@ -150,7 +150,7 @@ exports.initiate_payment_pg = async (req, res) => {
     }
 
     // Generate merchant order ID
-    // const merchantOrderId = orderId || generate_merchant_transaction_id();
+    const merchantOrderId = orderId || generate_merchant_transaction_id();
 
     // Step 1: Get Auth Token - FIX: Pass res properly
     const authToken = await getAuthToken(res);
@@ -251,7 +251,7 @@ exports.initiate_payment_pg = async (req, res) => {
 
 // ========== API 2: WEBHOOK (Callback from PhonePe) ==========
 exports.handle_webhook_pg = async (req, res) => {
-  console.error('Body:', req.body);
+    console.error('Body:', req.body);
 
   try {
     // 1. AUTH CHECK
