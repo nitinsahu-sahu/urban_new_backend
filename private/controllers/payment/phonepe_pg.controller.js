@@ -9,8 +9,10 @@ const {
 } = require("../../models/payment.model");
 const {
   generate_merchant_transaction_id,
-  format_amount_to_paise
+  format_amount_to_paise,
+  generate_merchant_order_id
 } = require("../../methods/payment/payment_methods");
+const { pool } = require("../../../dbhelper");
 
 // PhonePe Configuration
 const PHONEPE_CONFIG = {
@@ -74,13 +76,10 @@ const getAuthToken = async (res) => {
 
     // FIX: Properly read the response
     const responseText = await response.text();
-    console.log("Token response:", responseText);
-
     let data;
     try {
       data = JSON.parse(responseText);
     } catch (parseError) {
-      console.error('❌ Failed to parse token response:', parseError);
       if (res) {
         sendResponse(res, false, 'Failed to parse auth token response', null, 500);
       }
@@ -89,18 +88,15 @@ const getAuthToken = async (res) => {
 
     if (data.access_token) {
       cachedToken = data.access_token;
-      // Set expiry 5 minutes before actual expiry
       tokenExpiry = Date.now() + ((data.expires_in - 300) * 1000);
       return cachedToken;
     } else {
-      console.error('❌ No access token in response:', data);
       if (res) {
         sendResponse(res, false, 'Failed to obtain auth token', data, 500);
       }
       return null;
     }
   } catch (error) {
-    console.error('❌ Token fetch error:', error);
     if (res) {
       sendResponse(res, false, error.message, null, 500);
     }
@@ -141,8 +137,9 @@ const verifyWebhookAuth = (req) => {
 
 // ========== API 1: INITIATE PAYMENT ==========
 exports.initiate_payment_pg = async (req, res) => {
+
   try {
-    const { userId, amount, orderId } = req.body;
+    const { amount, merchantOrderId, orderId } = req.body;
     const user = req.user;
 
     if (!amount || amount <= 0) {
@@ -150,43 +147,41 @@ exports.initiate_payment_pg = async (req, res) => {
     }
 
     // Generate merchant order ID
-    const merchantOrderId = orderId || generate_merchant_transaction_id();
+    const merchantTranx_Id = generate_merchant_transaction_id() || merchantOrderId;
+    const order_Id = generate_merchant_order_id() || orderId;
 
     // Step 1: Get Auth Token - FIX: Pass res properly
     const authToken = await getAuthToken(res);
 
-    // Check if auth token retrieval failed
     if (!authToken) {
-      return; // getAuthToken already sent the error response
+      return;
     }
-
     // Step 2: Create PhonePe Order Payload (v2 format)
     const phonepePayload = {
-      merchantOrderId: merchantOrderId,
+      merchantOrderId: merchantTranx_Id,
       amount: format_amount_to_paise(amount),
       expireAfter: 1800, // 30 minutes in seconds
       metaInfo: {
-        udf1: userId,
-        udf2: user?.mobile_number || '',
+        udf1: user.user_Id,
+        udf2: user?.email || '',
         udf3: 'PG_Direct_Payment'
       },
       paymentFlow: {
         type: "PG_CHECKOUT"
       }
     };
-    console.log('phonepePayload', phonepePayload);
 
     // Step 3: Save to Database first
     const paymentResult = await create_payment_model(
-      userId,
+      user.user_id,
       amount,
       process.env.PHONEPE_CALLBACK_URL,
       {
-        orderId: orderId,
         purpose: 'PG Direct Payment',
-        merchantOrderId: merchantOrderId
+        merchantTranxId: merchantTranx_Id
       },
-      merchantOrderId
+      merchantTranx_Id,
+      order_Id
     );
 
     if (!paymentResult.success) {
@@ -205,70 +200,158 @@ exports.initiate_payment_pg = async (req, res) => {
       body: JSON.stringify(phonepePayload)
     });
 
-    console.log("Response status:", response.status);
-    console.log("Response ok:", response.ok);
-    console.log("authToken:", authToken);
-
-    // FIX: Properly read the response body
     const responseText = await response.text();
-    console.log("Response body:", responseText);
 
     let orderData;
     try {
       orderData = JSON.parse(responseText);
     } catch (parseError) {
-      console.error('❌ Failed to parse response:', parseError);
       return sendResponse(res, false, "Invalid response from PhonePe", { responseText }, 500);
     }
 
-    console.log("Parsed orderData:", orderData);
-
     if (response.ok && orderData.orderId) {
-      await update_payment_status_model(
-        merchantOrderId,
-        orderData.state || 'PENDING',
-        merchantOrderId,
+
+      const update = await update_payment_status_model(
+        merchantTranx_Id,
+        orderData.state,
+        orderData.orderId,
         orderData
       );
-
       return sendResponse(res, true, "Payment initiated successfully", {
         orderToken: orderData.token || orderData.data?.token,
-        merchantOrderId: merchantOrderId,
+        merchantOrderId: merchantTranx_Id,
         amount: amount,
         redirectUrl: orderData.data?.redirectUrl || null,
         orderData: orderData.data || orderData
       }, 200);
     } else {
-      console.error('❌ Order creation failed:', orderData);
       return sendResponse(res, false, orderData.message || "Payment initiation failed", orderData, 400);
     }
-
   } catch (error) {
-    console.error('❌ Unexpected error:', error);
     return sendResponse(res, false, error.message, null, 500);
   }
 };
 
 // ========== API 2: WEBHOOK (Callback from PhonePe) ==========
 exports.handle_webhook_pg = async (req, res) => {
-    console.error('Body:', req.body);
-    console.error('Body:', JSON.parse(req.body));
+  console.error('Body:', req.body);
+  console.error('Body:', JSON.parse(req.body));
 
   try {
     // 1. AUTH CHECK
     if (!verifyWebhookAuth(req)) {
-      console.error('❌ Webhook auth verification failed');
       return res.status(200).json({ success: false, message: "Auth failed" });
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "Webhook processed successfully",
-    });
+    // 2. PARSE WEBHOOK BODY
+    const webhookData = req.body;
+    console.log('📥 Webhook Received:', JSON.stringify(webhookData, null, 2));
+
+    // 3. EXTRACT PAYLOAD DATA
+    const { event, payload } = webhookData;
+
+    if (!payload || !payload.merchantOrderId) {
+      console.error('❌ Invalid webhook payload');
+      return res.status(200).json({
+        success: false,
+        message: "Invalid payload structure"
+      });
+    }
+
+    const {
+      merchantOrderId,
+      state,
+      orderId,
+      amount,
+      paymentDetails
+    } = payload;
+
+    // 4. DETERMINE PAYMENT STATUS
+    let paymentStatus = 'PENDING';
+    let paymentCompletedAt = null;
+
+    if (state === 'COMPLETED') {
+      paymentStatus = 'SUCCESS';
+      // Extract completion timestamp from first payment detail
+      if (paymentDetails && paymentDetails.length > 0) {
+        paymentCompletedAt = new Date(paymentDetails[0].timestamp).toISOString();
+      } else {
+        paymentCompletedAt = new Date().toISOString();
+      }
+    } else if (state === 'FAILED') {
+      paymentStatus = 'FAILED';
+    } else if (state === 'PENDING') {
+      paymentStatus = 'PENDING';
+    }
+
+    // 5. UPDATE DATABASE
+    try {
+      const updateQuery = `
+        UPDATE paymentstable 
+        SET 
+          status = $1,
+          phonepe_webhook_response = $2,
+          payment_completed_at = $3,
+          updated_at = $4
+        WHERE 
+          phonepe_transaction_id = $5 
+          AND is_active = true 
+          AND is_deleted = false
+        RETURNING *
+      `;
+
+      const updateValues = [
+        paymentStatus,
+        JSON.stringify(webhookData),
+        paymentCompletedAt,
+        Date.now(),
+        orderId
+      ];
+
+      const updateResult = await pool.query(updateQuery, updateValues);
+
+      if (updateResult.rows.length === 0) {
+        console.error('❌ Payment record not found for merchantOrderId:', merchantOrderId);
+        return res.status(200).json({
+          success: false,
+          message: "Payment record not found"
+        });
+      }
+
+      const updatedPayment = updateResult.rows[0];
+      console.log('✅ Payment updated successfully:', {
+        merchantOrderId,
+        status: paymentStatus,
+        paymentCompletedAt
+      });
+
+      // 6. HANDLE POST-PAYMENT ACTIONS BASED ON STATUS
+      if (state === 'COMPLETED') {
+        await handleSuccessfulPaymentPG(merchantOrderId, payload);
+      } else if (state === 'FAILED') {
+        await handleFailedPaymentPG(merchantOrderId, payload);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Webhook processed successfully",
+        data: {
+          merchantOrderId,
+          status: paymentStatus,
+          paymentId: updatedPayment.payment_id
+        }
+      });
+
+    } catch (dbError) {
+      console.error('❌ Database update error:', dbError);
+      return res.status(200).json({
+        success: false,
+        message: "Database update failed",
+        error: dbError.message
+      });
+    }
 
   } catch (error) {
-    console.error('❌ Webhook Processing Error:', error);
-    console.error('Error Stack:', error.stack);
     return res.status(400).json({
       success: false,
       message: error.message
