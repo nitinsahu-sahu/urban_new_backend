@@ -251,6 +251,8 @@ exports.initiate_payment_pg = async (req, res) => {
 
 // ========== API 2: WEBHOOK (Callback from PhonePe) ==========
 exports.handle_webhook_pg = async (req, res) => {
+    console.error('Body:', req.body);
+
   try {
     // 1. AUTH CHECK
     if (!verifyWebhookAuth(req)) {
