@@ -11,7 +11,7 @@ const {
 
 // ================= PG DIRECT PAYMENT (FLUTTER SDK) =================
 router.post("/pg/init", isAuth, initiate_payment_pg);
-router.post("/pg/webhook", handle_webhook_pg);  // No auth - PhonePe calls this
+router.post("/pg/webhook", handle_webhook_pg); 
 router.get("/pg/status/:transactionId", isAuth, check_status_pg);
 
 module.exports = router;

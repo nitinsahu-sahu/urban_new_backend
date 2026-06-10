@@ -108,6 +108,37 @@ const getAuthToken = async (res) => {
   }
 };
 
+// ========== VERIFY WEBHOOK AUTHORIZATION ==========
+const verifyWebhookAuth = (req) => {
+  try {
+    const authHeader = req.headers['authorization'];
+
+    if (!authHeader) {
+      return false;
+    }
+
+    // Generate SHA256(username:password) - exactly as PhonePe does
+    const authString = `${WEBHOOK_CONFIG.username}:${WEBHOOK_CONFIG.password}`;
+    const expectedHash = crypto
+      .createHash('sha256')
+      .update(authString)
+      .digest('hex');
+
+    const expectedAuth = `SHA256(${authString})`;
+
+    // Try both formats (PhonePe sometimes sends just hash, sometimes with wrapper)
+    if (authHeader === expectedAuth || authHeader === expectedHash) {
+      console.log('✅ Webhook authorization verified');
+      return true;
+    }
+
+    return false;
+
+  } catch (error) {
+    return false;
+  }
+};
+
 // ========== API 1: INITIATE PAYMENT ==========
 exports.initiate_payment_pg = async (req, res) => {
   try {
@@ -218,114 +249,8 @@ exports.initiate_payment_pg = async (req, res) => {
   }
 };
 
-// ========== VERIFY WEBHOOK AUTHORIZATION ==========
-const verifyWebhookAuth = (req) => {
-  try {
-    const authHeader = req.headers['authorization'];
-
-    if (!authHeader) {
-      return false;
-    }
-
-    // Generate SHA256(username:password) - exactly as PhonePe does
-    const authString = `${WEBHOOK_CONFIG.username}:${WEBHOOK_CONFIG.password}`;
-    const expectedHash = crypto
-      .createHash('sha256')
-      .update(authString)
-      .digest('hex');
-
-    const expectedAuth = `SHA256(${authString})`;
-
-    // Try both formats (PhonePe sometimes sends just hash, sometimes with wrapper)
-    if (authHeader === expectedAuth || authHeader === expectedHash) {
-      console.log('✅ Webhook authorization verified');
-      return true;
-    }
-
-    return false;
-
-  } catch (error) {
-    return false;
-  }
-};
-
 // ========== API 2: WEBHOOK (Callback from PhonePe) ==========
-// exports.handle_webhook_pg = async (req, res) => {
-// console.log("1. body",req.body);
-
-//   try {
-//     // 1. AUTH CHECK
-//     if (!verifyWebhookAuth(req)) {
-//       return res.status(200).json({ success: false });
-//     }
-
-//     const { event, payload, type } = req.body;
-
-
-//     const {
-//       merchantOrderId,
-//       paymentDetails,
-//       state,
-//       amount
-//     } = payload;
-//     if (!merchantOrderId) {
-//       console.error('❌ merchantOrderId missing');
-//       return res.status(200).json({ success: false });
-//     }
-
-//     // ✅ FIX: Extract transactionId from array
-//     let transactionId = null;
-//     if (paymentDetails && Array.isArray(paymentDetails) && paymentDetails.length > 0) {
-//       transactionId = paymentDetails[0].transactionId;
-//       console.log('✅ Extracted transactionId:', transactionId);
-//     } else {
-//       console.log('⚠️ paymentDetails is not an array or empty:', paymentDetails);
-//     }
-
-//     // 2. STATUS NORMALIZATION
-//     let paymentStatus = 'PENDING';
-
-//     if (state === 'COMPLETED') {
-//       paymentStatus = 'SUCCESS';
-//     } else if (state === 'FAILED') {
-//       paymentStatus = 'FAILED';
-//     }
-
-//     console.log('📊 Final Status:', paymentStatus);
-
-//     // 3. DB UPDATE - Pass correct transactionId
-//     const updateResult = await update_payment_status_model(
-//       merchantOrderId,
-//       paymentStatus,
-//       transactionId,
-//       payload
-//     );
-
-//     console.log('📝 DB Update Result:', updateResult);
-
-//     // 4. SUCCESS HANDLER
-//     if (updateResult.success && paymentStatus === 'SUCCESS') {
-//       await handleSuccessfulPaymentPG(merchantOrderId, payload);
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Webhook processed"
-//     });
-
-//   } catch (error) {
-//     console.error('❌ Webhook Error:', error);
-
-//     return res.status(200).json({
-//       success: false,
-//       message: error.message
-//     });
-//   }
-// };
 exports.handle_webhook_pg = async (req, res) => {
-  console.log("📨 Webhook received at:", new Date().toISOString());
-  console.log("📦 Raw Body:", JSON.stringify(req.body, null, 2));
-  
   try {
     // 1. AUTH CHECK
     if (!verifyWebhookAuth(req)) {
@@ -333,167 +258,20 @@ exports.handle_webhook_pg = async (req, res) => {
       return res.status(200).json({ success: false, message: "Auth failed" });
     }
 
-    // 2. EXTRACT DATA - Handle multiple possible structures
-    let webhookData = req.body;
-    
-    // Case 1: Direct payload structure
-    if (webhookData.payload && typeof webhookData.payload === 'object') {
-      var { event, payload } = webhookData;
-    }
-    // Case 2: Data wrapped inside another object
-    else if (webhookData.data && webhookData.data.payload) {
-      var { event, payload } = webhookData.data;
-    }
-    // Case 3: No wrapper, direct structure
-    else if (webhookData.event && (webhookData.merchantOrderId || webhookData.payload)) {
-      var event = webhookData.event;
-      var payload = webhookData.payload || webhookData;
-    }
-    // Case 4: Fallback - treat entire body as payload
-    else {
-      console.log("⚠️ Using fallback - treating entire body as payload");
-      var event = webhookData.event;
-      var payload = webhookData;
-    }
-
-    console.log("✅ Parsed Event:", event);
-    console.log("✅ Parsed Payload Keys:", payload ? Object.keys(payload) : "No payload");
-
-    // 3. SAFELY EXTRACT REQUIRED FIELDS with multiple fallbacks
-    const merchantOrderId = payload?.merchantOrderId 
-      || webhookData.merchantOrderId 
-      || payload?.merchantOrderId 
-      || req.body.merchantOrderId;
-    
-    const state = payload?.state 
-      || webhookData.state 
-      || req.body.state;
-    
-    const amount = payload?.amount 
-      || webhookData.amount 
-      || req.body.amount;
-    
-    let paymentDetails = payload?.paymentDetails 
-      || webhookData.paymentDetails 
-      || req.body.paymentDetails;
-    
-    // 4. HANDLE paymentDetails if it's a string (JSON stringified)
-    if (paymentDetails && typeof paymentDetails === 'string') {
-      try {
-        paymentDetails = JSON.parse(paymentDetails);
-        console.log("✅ Parsed paymentDetails from string");
-      } catch (e) {
-        console.error("❌ Failed to parse paymentDetails string:", e.message);
-      }
-    }
-
-    // 5. VALIDATE merchantOrderId
-    if (!merchantOrderId) {
-      console.error('❌ merchantOrderId missing in webhook');
-      console.error('Full webhook data:', JSON.stringify(req.body, null, 2));
-      return res.status(200).json({ 
-        success: false, 
-        message: "merchantOrderId missing",
-        receivedData: req.body 
-      });
-    }
-
-    console.log(`✅ Processing order: ${merchantOrderId}`);
-    console.log(`📊 Order State: ${state}`);
-    console.log(`💰 Amount: ${amount}`);
-
-    // 6. EXTRACT TRANSACTION ID safely
-    let transactionId = null;
-    if (paymentDetails && Array.isArray(paymentDetails) && paymentDetails.length > 0) {
-      transactionId = paymentDetails[0].transactionId || paymentDetails[0].transaction_id;
-      console.log('✅ Extracted transactionId:', transactionId);
-      console.log('✅ Payment Mode:', paymentDetails[0].paymentMode);
-      console.log('✅ Payment State:', paymentDetails[0].state);
-    } else if (paymentDetails && typeof paymentDetails === 'object' && !Array.isArray(paymentDetails)) {
-      // Handle case where paymentDetails is an object, not array
-      transactionId = paymentDetails.transactionId || paymentDetails.transaction_id;
-      console.log('✅ Extracted transactionId from object:', transactionId);
-    } else {
-      console.log('⚠️ No paymentDetails found or invalid format');
-    }
-
-    // 7. DETERMINE PAYMENT STATUS
-    let paymentStatus = 'PENDING';
-    
-    if (state === 'COMPLETED' || state === 'SUCCESS' || state === 'SUCCESSFUL') {
-      paymentStatus = 'SUCCESS';
-    } else if (state === 'FAILED' || state === 'FAILURE' || state === 'ERROR') {
-      paymentStatus = 'FAILED';
-    } else if (state === 'PENDING' || state === 'INITIATED') {
-      paymentStatus = 'PENDING';
-    }
-
-    console.log('📊 Final Payment Status:', paymentStatus);
-
-    // 8. CHECK FOR DUPLICATE WEBHOOK
-    const isDuplicate = await checkDuplicateWebhook(merchantOrderId, transactionId);
-    if (isDuplicate) {
-      console.log(`⚠️ Duplicate webhook received for order: ${merchantOrderId}`);
-      return res.status(200).json({ 
-        success: true, 
-        message: "Duplicate webhook ignored" 
-      });
-    }
-
-    // 9. UPDATE DATABASE
-    const updateResult = await update_payment_status_model(
-      merchantOrderId,
-      paymentStatus,
-      transactionId,
-      payload || webhookData
-    );
-
-    console.log('📝 DB Update Result:', updateResult);
-
-    // 10. HANDLE SUCCESSFUL PAYMENT
-    if (updateResult.success && paymentStatus === 'SUCCESS') {
-      try {
-        await handleSuccessfulPaymentPG(merchantOrderId, payload || webhookData);
-        console.log(`✅ Success handler executed for order: ${merchantOrderId}`);
-      } catch (successHandlerError) {
-        console.error(`❌ Success handler failed for order ${merchantOrderId}:`, successHandlerError);
-        // Don't return error, webhook already processed
-      }
-    }
-
-    // 11. RETURN SUCCESS RESPONSE
     return res.status(200).json({
       success: true,
       message: "Webhook processed successfully",
-      orderId: merchantOrderId,
-      status: paymentStatus
     });
 
   } catch (error) {
     console.error('❌ Webhook Processing Error:', error);
     console.error('Error Stack:', error.stack);
-    
-    // Always return 200 to PhonePe to prevent retries
-    return res.status(200).json({
+    return res.status(400).json({
       success: false,
-      message: error.message,
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: error.message
     });
   }
 };
-
-// Helper function to check duplicate webhooks
-async function checkDuplicateWebhook(merchantOrderId, transactionId) {
-  try {
-    // You need to implement this based on your database
-    // Example: Check if this order already has a webhook processed
-    const existingWebhook = await check_webhook_processed_model(merchantOrderId, transactionId);
-    return existingWebhook && existingWebhook.processed === true;
-  } catch (error) {
-    console.error('Error checking duplicate webhook:', error);
-    return false; // Assume not duplicate if check fails
-  }
-}
 
 // ========== HELPER: Handle Successful Payment ==========
 const handleSuccessfulPaymentPG = async (merchantOrderId, paymentData) => {
