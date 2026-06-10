@@ -14,8 +14,6 @@ const initializeDatabase = async () => {
   const client = await pool.connect();
   
   try {
-    console.log('\n🔄 Database tables initialize ho rahi hain...\n');
-    
     await client.query('BEGIN');
 
     // ========== DROP OLD TABLE (If structure changed) ==========
@@ -23,7 +21,6 @@ const initializeDatabase = async () => {
     const dropOld = false; // true करें अगर fresh start करना है
     
     if (dropOld) {
-      console.log('⚠️  Dropping old tables...');
       await client.query('DROP TABLE IF EXISTS refunds CASCADE;');
       await client.query('DROP TABLE IF EXISTS paymentsTable CASCADE;');
       await client.query('DROP TABLE IF EXISTS paymentstable CASCADE;');
@@ -42,7 +39,6 @@ const initializeDatabase = async () => {
 
     if (!tableExists) {
       // ========== CREATE PAYMENTS TABLE ==========
-      console.log('📝 Creating paymentstable...');
       await client.query(`
         CREATE TABLE paymentstable (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -65,12 +61,7 @@ const initializeDatabase = async () => {
           is_deleted BOOLEAN DEFAULT false
         );
       `);
-      console.log('✅ paymentstable created successfully');
     } else {
-      console.log('ℹ️  paymentstable already exists');
-      
-      // ========== ADD MISSING COLUMNS (Safe migration) ==========
-      console.log('\n🔍 Checking for missing columns...');
       
       // Check and add phonepe_webhook_response
       await addColumnIfNotExists(client, 'paymentstable', 
@@ -88,12 +79,9 @@ const initializeDatabase = async () => {
       await addColumnIfNotExists(client, 'paymentstable', 
         'phonepe_transaction_id', 'VARCHAR(255)');
       
-      console.log('✅ Column migration completed');
     }
 
     // ========== CREATE INDEXES ==========
-    console.log('\n📊 Creating indexes...');
-    
     const indexes = [
       { name: 'idx_paymentstable_merchant_txn', column: 'merchant_transaction_id' },
       { name: 'idx_paymentstable_user_id', column: 'user_id' },
@@ -108,7 +96,6 @@ const initializeDatabase = async () => {
           CREATE INDEX IF NOT EXISTS ${index.name} 
           ON paymentstable(${index.column});
         `);
-        console.log(`  ✅ Index: ${index.name}`);
       } catch (err) {
         console.warn(`  ⚠️  Could not create ${index.name}:`, err.message);
       }
@@ -124,7 +111,6 @@ const initializeDatabase = async () => {
     `);
 
     if (!refundTableCheck.rows[0].exists) {
-      console.log('\n📝 Creating refunds table...');
       await client.query(`
         CREATE TABLE refunds (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -141,7 +127,6 @@ const initializeDatabase = async () => {
           is_deleted BOOLEAN DEFAULT false
         );
       `);
-      console.log('✅ refunds table created');
     } else {
       console.log('ℹ️  refunds table already exists');
     }
@@ -149,7 +134,6 @@ const initializeDatabase = async () => {
     await client.query('COMMIT');
     
     // ========== PRINT TABLE STRUCTURE ==========
-    console.log('\n📋 Current paymentstable structure:');
     const structure = await client.query(`
       SELECT column_name, data_type, is_nullable 
       FROM information_schema.columns 
@@ -158,7 +142,6 @@ const initializeDatabase = async () => {
     `);
     console.table(structure.rows);
     
-    console.log('\n🎉 All tables initialized successfully!\n');
 
   } catch (error) {
     await client.query('ROLLBACK');
@@ -183,12 +166,10 @@ const addColumnIfNotExists = async (client, tableName, columnName, columnType) =
     `, [tableName, columnName]);
 
     if (!columnCheck.rows[0].exists) {
-      console.log(`  ➕ Adding ${columnName} (${columnType})...`);
       await client.query(`
         ALTER TABLE ${tableName} 
         ADD COLUMN ${columnName} ${columnType};
       `);
-      console.log(`  ✅ Column ${columnName} added`);
     } else {
       console.log(`  ℹ️  Column ${columnName} already exists`);
     }

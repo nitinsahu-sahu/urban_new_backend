@@ -2,7 +2,6 @@ const { pool } = require("../../dbhelper");
 const { current_epoch_time } = require("../methods/current_epoch_time");
 const verify_otp_model = async (otp, email, access_type) => {
   try {
-    console.log(otp, email, access_type);
     const current_epoch = current_epoch_time();
     const check_otp_query = `SELECT ${
       access_type == "WEB" ? "web_token" : "app_token"
@@ -13,7 +12,6 @@ const verify_otp_model = async (otp, email, access_type) => {
       const is_user_query = "SELECT * from users where email = $1";
       const is_user_value = [email];
       const is_user_result = await pool.query(is_user_query, is_user_value);
-      console.log(is_user_result.rows);
 
       return {
         success: true,
@@ -36,7 +34,6 @@ const verify_otp_model = async (otp, email, access_type) => {
       };
     }
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "otp verification failed",

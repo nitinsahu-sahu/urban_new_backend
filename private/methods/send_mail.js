@@ -63,7 +63,6 @@
 //       emailParams,
 //       emailConfig
 //     );
-//     console.log("Email sent successfully:", emailResponse.data);
 //     return true; // Return true on success
 //   } catch (error) {
 //     console.error(
@@ -146,7 +145,6 @@ const send_mail = async (email, otp) => {
 
     // Send email
     const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully:", info.response);
     return true; // Return true on success
   } catch (error) {
     console.error("Error sending email:", error.message);
@@ -225,7 +223,6 @@ const send_forget_password_mail = async (email, otp) => {
 
     // Send email
     const info = await transporter.sendMail(mailOptions);
-    console.log("Forget password email sent successfully:", info.response);
     return true; // Return true on success
   } catch (error) {
     console.error("Error sending forget password email:", error.message);

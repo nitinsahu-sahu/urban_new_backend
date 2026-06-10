@@ -66,7 +66,6 @@ const send_otp = async (email, access_type) => {
       };
     }
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "otp not sent",

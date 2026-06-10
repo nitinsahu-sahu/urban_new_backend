@@ -35,7 +35,6 @@ const handleUpload = async (req, res) => {
     const data = await s3Client.send(new PutObjectCommand(bucketParams));
     res.status(200).json({ success: true, url: fileURL });
   } catch (err) {
-    console.log("Error", err);
     res.status(500).send("Error uploading file");
   }
 };

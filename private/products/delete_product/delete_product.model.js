@@ -6,7 +6,6 @@ const delete_product_model = async (product_id) => {
     WHERE product_id = $1 RETURNING *;`;
     const value = [product_id];
     const result = await pool.query(query, value);
-    console.log(result.rows);
     if (result.rows.length != 0) {
       return {
         success: true,

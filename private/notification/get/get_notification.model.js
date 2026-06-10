@@ -61,7 +61,6 @@ const get_notification_model = async (
       data: result.rows,
     };
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "An unexpected error occurred while fetching notification data.",

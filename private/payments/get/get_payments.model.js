@@ -54,7 +54,6 @@ const get_payments_model = async (
       data: result.rows,
     };
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "An unexpected error occurred while fetching payment data.",

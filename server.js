@@ -102,13 +102,7 @@ const startServer = async () => {
   try {
     // Step 1: Database Connection
     await pool.connect();
-    console.log("✅ PostgreSQL Connected Successfully");
-
-    // Step 2: Initialize Database Tables
-    console.log("🔄 Initializing database tables...");
     await initializeDatabase();
-    console.log("✅ Database tables initialized successfully");
-
     // Step 3: Start Server
     const port = process.env.RUN_PORT || 3000;
     app.listen(port, () => {
@@ -141,10 +135,8 @@ process.on("unhandledRejection", (err) => {
 
 // Graceful shutdown
 process.on("SIGTERM", async () => {
-  console.log("👋 SIGTERM received. Shutting down gracefully...");
   try {
     await pool.end();
-    console.log("Database connection closed.");
   } catch (err) {
     console.error("Error closing database connection:", err);
   }
@@ -152,10 +144,8 @@ process.on("SIGTERM", async () => {
 });
 
 process.on("SIGINT", async () => {
-  console.log("👋 SIGINT received. Shutting down gracefully...");
   try {
     await pool.end();
-    console.log("Database connection closed.");
   } catch (err) {
     console.error("Error closing database connection:", err);
   }

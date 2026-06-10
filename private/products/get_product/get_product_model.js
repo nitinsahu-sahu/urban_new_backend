@@ -14,7 +14,6 @@ const get_product_model = async (
   user_id
 ) => {
   try {
-    console.log(search)
     let query = `SELECT 
       p.*,
       COUNT(*) OVER() AS count,
@@ -136,9 +135,6 @@ const get_product_model = async (
       query += ` ORDER BY p.created_at DESC LIMIT $${limitParam} OFFSET $${offsetParam}`;
       values.push(limit, (page - 1) * limit);
     }
-
-    console.log('Final query:', query);
-    console.log('Values:', values);
 
     const result = await pool.query(query, values);
     const count = result?.rows[0]?.count;

@@ -16,7 +16,6 @@ const soft_delete_notification_model = async (noti_id, user_id) => {
       message: "Notification deleted successfully.",
     };
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "An error occurred while deleting notification.",
@@ -40,7 +39,6 @@ const update_read_status_model = async (noti_id, user_id, is_readed) => {
       message: "Notification read status updated successfully.",
     };
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "An error occurred while updating notification read status.",

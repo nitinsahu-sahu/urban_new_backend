@@ -19,7 +19,6 @@ const get_orders_count_model = async (user_id) => {
 
     const result = await pool.query(query, values);
     const counts = result.rows[0];
-    console.log("Order counts fetched successfully:", counts);
     return {
       success: true,
       message: "Order counts fetched successfully.",

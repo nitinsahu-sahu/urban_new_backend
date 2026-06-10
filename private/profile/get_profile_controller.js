@@ -4,7 +4,6 @@ const get_profile_controller = async (request, response, next) => {
   try {
     const authorizationHeader = request.headers.authorization;
     const res = await validateToken(authorizationHeader);
-    console.log(res);
     if (res.success) {
       const result = await get_profile_model(authorizationHeader);
       if (result.success) {
@@ -25,7 +24,6 @@ const get_profile_controller = async (request, response, next) => {
     }
   } catch (error) {
     next(error);
-    console.log(error);
     response.status(200).json({ success: false, error: error.message });
   }
 };

@@ -21,7 +21,6 @@ const update_user = async (request, response, next) => {
       is_deleted,
       profile_img
     );
-    console.log(res)
     if (res.success) {
       response.status(200).json({
         ...res,

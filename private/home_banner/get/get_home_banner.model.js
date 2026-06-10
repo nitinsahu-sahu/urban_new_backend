@@ -49,7 +49,6 @@ const get_home_banner_model = async (
       data: result.rows,
     };
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "An unexpected error occurred while fetching home banner data.",

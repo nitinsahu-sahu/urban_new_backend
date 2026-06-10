@@ -38,10 +38,6 @@ const verify_phonepe_signature = (payload, receivedSignature, saltKey, saltIndex
     // Expected format: hash###saltIndex
     const expectedSignature = `${hash}###${saltIndex}`;
     
-    console.log("Generated Hash:", hash);
-    console.log("Expected Signature:", expectedSignature);
-    console.log("Received Signature:", receivedSignature);
-    
     // Compare signatures
     return receivedSignature === expectedSignature;
     

@@ -44,7 +44,6 @@ const get_user_model = async (
     }
 
     const result = await pool.query(query, values);
-    console.log(result.rows)
     const count = result?.rows[0]?.count;
 
     if (result.rows.length === 0) {
@@ -65,7 +64,6 @@ const get_user_model = async (
       data: result.rows,
     };
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "An unexpected error occurred while fetching user data.",

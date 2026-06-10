@@ -150,8 +150,6 @@ const update_payment_status_model = async (
       };
     }
 
-    console.log('✅ Payment Updated:', result.rows[0].status);
-
     return {
       success: true,
       data: result.rows[0]

@@ -54,7 +54,6 @@ const get_address_model = async (
       data: result.rows,
     };
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "An unexpected error occurred while fetching product data.",

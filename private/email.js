@@ -17,8 +17,6 @@ const addEmailConfig = {
 axios
   .post("https://onesignal.com/api/v1/players", addEmailParams, addEmailConfig)
   .then((response) => {
-    console.log("Email subscriber added successfully:", response.data);
-
     // Step 2: Send Email
     const emailParams = {
       app_id: "bbe652be-fe38-47cb-b781-34424893fafc", // Your OneSignal App ID

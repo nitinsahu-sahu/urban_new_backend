@@ -10,7 +10,6 @@ const get_orders_model = async (
   start_date,
   end_date
 ) => {
-  console.log(start_date, end_date);
   try {
     let query = `SELECT 
     o.*,
@@ -85,7 +84,6 @@ WHERE
       values.push((page - 1) * limit);
     }
 
-    console.log(query);
     const result = await pool.query(query, values);
     const count = result?.rows[0]?.count;
 
@@ -107,7 +105,6 @@ WHERE
       data: result.rows,
     };
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "An unexpected error occurred while fetching order data.",

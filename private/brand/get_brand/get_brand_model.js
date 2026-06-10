@@ -71,7 +71,6 @@ const get_brand_model = async (
       data: result.rows,
     };
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "An unexpected error occurred while fetching brand data.",

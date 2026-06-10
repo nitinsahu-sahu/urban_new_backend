@@ -59,7 +59,6 @@ const get_product_offers_model = async (
       data: result.rows,
     };
   } catch (error) {
-    console.log(error);
     return {
       success: false,
       message: "An unexpected error occurred while fetching product offers data.",
