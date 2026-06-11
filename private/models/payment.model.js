@@ -203,6 +203,68 @@ const update_payment_refund_model = async (merchant_transaction_id, metadata) =>
   }
 };
 
+const update_webhook_data = async (paymentStatus, webhookData, paymentCompletedAt, orderId) => {
+  try {
+    const updateQuery = `
+        UPDATE paymentstable 
+        SET 
+          status = $1,
+          phonepe_webhook_response = $2,
+          payment_completed_at = $3,
+          updated_at = $4
+        WHERE 
+          phonepe_transaction_id = $5 
+          AND is_active = true 
+          AND is_deleted = false
+        RETURNING 
+          id,
+          payment_id,
+          user_id,
+          merchant_transaction_id,
+          merchant_order_id,
+          phonepe_transaction_id,
+          amount,
+          currency,
+          status,
+          phonepe_webhook_response,
+          callback_url,
+          metadata,
+          payment_completed_at,
+          created_at,
+          updated_at
+      `;
+
+    const updateValues = [
+      paymentStatus,
+      JSON.stringify(webhookData),
+      paymentCompletedAt,
+      Date.now(),
+      orderId
+    ];
+
+    const updateResult = await pool.query(updateQuery, updateValues);
+
+    if (updateResult.rows.length === 0) {
+      console.error('❌ Payment record not found for orderId:', orderId);
+      return {
+        success: false,
+        error: "Payment record not found"
+      };
+    }
+
+    const updatedPayment = updateResult.rows[0]; // ✅ Ye single object hai
+
+    return updatedPayment
+
+  } catch (error) {
+    return {
+      success: false,
+      message: "Database update failed",
+      error: error.message
+    };
+  }
+}
+
 const get_user_payments_model = async (user_id, page = 1, limit = 10, status = null) => {
   try {
     const offset = (page - 1) * limit;
@@ -330,7 +392,10 @@ const get_payment_by_order_id_model = async (merchant_order_id) => {
     };
   }
 };
+
+
 module.exports = {
+  update_webhook_data,
   create_payment_model,
   get_payment_by_transaction_id_model,
   get_payment_by_order_id_model,

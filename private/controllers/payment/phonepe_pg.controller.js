@@ -5,7 +5,8 @@ const {
   create_payment_model,
   get_payment_by_transaction_id_model,
   update_payment_status_model,
-  get_payment_by_order_id_model
+  get_payment_by_order_id_model,
+  update_webhook_data
 } = require("../../models/payment.model");
 const {
   generate_merchant_transaction_id,
@@ -124,7 +125,6 @@ const verifyWebhookAuth = (req) => {
 
     // Try both formats (PhonePe sometimes sends just hash, sometimes with wrapper)
     if (authHeader === expectedAuth || authHeader === expectedHash) {
-      console.log('✅ Webhook authorization verified');
       return true;
     }
 
@@ -257,11 +257,7 @@ exports.handle_webhook_pg = async (req, res) => {
     }
 
     const {
-      merchantOrderId,
-      state,
-      orderId,
-      amount,
-      paymentDetails
+      merchantOrderId, state, orderId, amount, paymentDetails
     } = payload;
 
     // 4. DETERMINE PAYMENT STATUS
@@ -270,7 +266,6 @@ exports.handle_webhook_pg = async (req, res) => {
 
     if (state === 'COMPLETED') {
       paymentStatus = 'SUCCESS';
-      // Extract completion timestamp from first payment detail
       if (paymentDetails && paymentDetails.length > 0) {
         paymentCompletedAt = new Date(paymentDetails[0].timestamp).toISOString();
       } else {
@@ -283,72 +278,17 @@ exports.handle_webhook_pg = async (req, res) => {
     }
 
     // 5. UPDATE DATABASE
-    try {
-      const updateQuery = `
-        UPDATE paymentstable 
-        SET 
-          status = $1,
-          phonepe_webhook_response = $2,
-          payment_completed_at = $3,
-          updated_at = $4
-        WHERE 
-          phonepe_transaction_id = $5 
-          AND is_active = true 
-          AND is_deleted = false
-        RETURNING *
-      `;
-
-      const updateValues = [
-        paymentStatus,
-        JSON.stringify(webhookData),
-        paymentCompletedAt,
-        Date.now(),
-        orderId
-      ];
-
-      const updateResult = await pool.query(updateQuery, updateValues);
-
-      if (updateResult.rows.length === 0) {
-        console.error('❌ Payment record not found for merchantOrderId:', merchantOrderId);
-        return res.status(200).json({
-          success: false,
-          message: "Payment record not found"
-        });
-      }
-
-      const updatedPayment = updateResult.rows[0];
-      console.log('✅ Payment updated successfully:', {
-        merchantOrderId,
-        status: paymentStatus,
-        paymentCompletedAt
-      });
-
-      // 6. HANDLE POST-PAYMENT ACTIONS BASED ON STATUS
-      if (state === 'COMPLETED') {
-        await handleSuccessfulPaymentPG(merchantOrderId, payload);
-      } else if (state === 'FAILED') {
-        await handleFailedPaymentPG(merchantOrderId, payload);
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: "Webhook processed successfully",
-        data: {
-          merchantOrderId,
-          status: paymentStatus,
-          paymentId: updatedPayment.payment_id
-        }
-      });
-
-    } catch (dbError) {
-      console.error('❌ Database update error:', dbError);
-      return res.status(200).json({
-        success: false,
-        message: "Database update failed",
-        error: dbError.message
-      });
-    }
-
+    const paymentResult = await update_webhook_data(
+      paymentStatus,
+      webhookData,
+      paymentCompletedAt,
+      orderId
+    );
+    return res.status(200).json({
+      success: true,
+      message: "Webhook updated successfully",
+      data: paymentResult
+    });
   } catch (error) {
     return res.status(400).json({
       success: false,
