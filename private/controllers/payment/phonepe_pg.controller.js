@@ -6,7 +6,8 @@ const {
   get_payment_by_transaction_id_model,
   update_payment_status_model,
   get_payment_by_order_id_model,
-  update_webhook_data
+  update_webhook_data,
+  updateOrderStatusToInProcess
 } = require("../../models/payment.model");
 const {
   generate_merchant_transaction_id,
@@ -368,6 +369,10 @@ exports.check_status_pg = async (req, res) => {
       data.orderId
     );
 
+    // if (paymentResult.status === "SUCCESS") {
+    //   const upstatus = await updateOrderStatusToInProcess(paymentResult.merchant_order_id)
+
+    // }
     return sendResponse(res, true, "Status retrieved", {
       status: paymentStatus,
       transactionId: transactionId,

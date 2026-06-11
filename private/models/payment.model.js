@@ -393,8 +393,35 @@ const get_payment_by_order_id_model = async (merchant_order_id) => {
   }
 };
 
+const updateOrderStatusToInProcess = async (orderId) => {
+  console.log("orderId", orderId);
+  
+  try {
+    // Option 2: Update without any status condition
+    const query = `
+      UPDATE public.orders 
+      SET status = 'IN_PROCESS'
+      WHERE order_id = $1
+      RETURNING *;
+    `;
+    
+    const result = await pool.query(query, [orderId]);
+    
+    if (result.rows.length > 0) {
+      console.log(`✅ Order ${orderId} status updated to IN_PROCESS (previous status: ${result.rows[0].status})`);
+      return true;
+    } else {
+      console.log(`⚠️ Order ${orderId} not found in database`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`❌ Error updating order status for ${orderId}:`, error);
+    throw error;
+  }
+};
 
 module.exports = {
+  updateOrderStatusToInProcess,
   update_webhook_data,
   create_payment_model,
   get_payment_by_transaction_id_model,

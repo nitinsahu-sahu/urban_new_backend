@@ -2,6 +2,7 @@ const { create_orders_model } = require("./create_orders.model");
 const { create_orders_auth } = require("../validation_orders");
 
 const create_orders_controller = async (request, response, next) => {
+  
   try {
     await create_orders_auth.validateAsync(request.body);
     const {
