@@ -62,7 +62,7 @@ app.get("/status", (request, response) => {
 });
 
 // IMPORTANT: Webhook route के लिए raw body parser
-app.use('/payment/webhook', express.raw({ 
+app.use('/payment/pg/webhook', express.raw({ 
   type: 'application/json',
   limit: '5mb' 
 }));

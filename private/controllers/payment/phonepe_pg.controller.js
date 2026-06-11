@@ -234,6 +234,8 @@ exports.initiate_payment_pg = async (req, res) => {
 
 // ========== API 2: WEBHOOK (Callback from PhonePe) ==========
 exports.handle_webhook_pg = async (req, res) => {
+    console.log('📥 Webhook Received:', req.body);
+
   try {
     // 1. AUTH CHECK
     if (!verifyWebhookAuth(req)) {
@@ -243,7 +245,6 @@ exports.handle_webhook_pg = async (req, res) => {
     // 2. PARSE WEBHOOK BODY
     const webhookData = req.body;
     console.log('📥 Webhook Received:', JSON.stringify(webhookData, null, 2));
-    console.log('📥 Webhook Received:', webhookData);
 
     // 3. EXTRACT PAYLOAD DATA
     const { event, payload } = webhookData;
@@ -345,11 +346,26 @@ exports.check_status_pg = async (req, res) => {
 
     // Update local database if needed
     let paymentStatus = 'PENDING';
+    let paymentCompletedAt = null;
+
     if (data.state === 'COMPLETED') {
       paymentStatus = 'SUCCESS';
+       if (data.paymentDetails && data.paymentDetails.length > 0) {
+        paymentCompletedAt = new Date(data.paymentDetails[0].timestamp).toISOString();
+      } else {
+        paymentCompletedAt = new Date().toISOString();
+      }
     } else if (data.state === 'FAILED') {
       paymentStatus = 'FAILED';
     }
+
+    // 5. UPDATE DATABASE
+    const paymentResult = await update_webhook_data(
+      paymentStatus,
+      data,
+      paymentCompletedAt,
+      data.orderId
+    );
 
     return sendResponse(res, true, "Status retrieved", {
       status: paymentStatus,

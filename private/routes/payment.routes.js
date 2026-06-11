@@ -1,4 +1,3 @@
-// routes/payment.route.js
 const express = require("express");
 const isAuth = require("../methods/token_validate_middelware");
 const router = express.Router();
