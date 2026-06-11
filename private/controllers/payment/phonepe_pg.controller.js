@@ -140,6 +140,8 @@ exports.initiate_payment_pg = async (req, res) => {
 
   try {
     const { amount, merchantOrderId, orderId } = req.body;
+    console.log("==orderId==", orderId);
+
     const user = req.user;
 
     if (!amount || amount <= 0) {
@@ -148,7 +150,7 @@ exports.initiate_payment_pg = async (req, res) => {
 
     // Generate merchant order ID
     const merchantTranx_Id = generate_merchant_transaction_id() || merchantOrderId;
-    const order_Id = generate_merchant_order_id() || orderId;
+    const order_Id = orderId ? orderId : generate_merchant_order_id();
 
     // Step 1: Get Auth Token - FIX: Pass res properly
     const authToken = await getAuthToken(res);
@@ -234,7 +236,7 @@ exports.initiate_payment_pg = async (req, res) => {
 
 // ========== API 2: WEBHOOK (Callback from PhonePe) ==========
 exports.handle_webhook_pg = async (req, res) => {
-    console.log('📥 Webhook Received:', req.body);
+  console.log('📥 Webhook Received:', req.body);
 
   try {
     // 1. AUTH CHECK
@@ -342,7 +344,6 @@ exports.check_status_pg = async (req, res) => {
     });
 
     const data = await response.json();
-    console.log('📥 Status Response:', data);
 
     // Update local database if needed
     let paymentStatus = 'PENDING';
@@ -350,7 +351,7 @@ exports.check_status_pg = async (req, res) => {
 
     if (data.state === 'COMPLETED') {
       paymentStatus = 'SUCCESS';
-       if (data.paymentDetails && data.paymentDetails.length > 0) {
+      if (data.paymentDetails && data.paymentDetails.length > 0) {
         paymentCompletedAt = new Date(data.paymentDetails[0].timestamp).toISOString();
       } else {
         paymentCompletedAt = new Date().toISOString();
