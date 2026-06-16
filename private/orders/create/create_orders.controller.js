@@ -2,7 +2,7 @@ const { create_orders_model } = require("./create_orders.model");
 const { create_orders_auth } = require("../validation_orders");
 
 const create_orders_controller = async (request, response, next) => {
-  
+
   try {
     await create_orders_auth.validateAsync(request.body);
     const {
@@ -32,9 +32,7 @@ const create_orders_controller = async (request, response, next) => {
       });
     }
   } catch (error) {
-    next(error);
-    console.error("Error occurred", error);
-    response.status(200).json({ success: false, error: error.message });
+    response.status(400).json({ success: false, error: error.message });
   }
 };
 
