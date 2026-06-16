@@ -5,7 +5,7 @@ const create_orders_auth = Joi.object({
   product: Joi.array()
     .items(
       Joi.object({
-        product_id: Joi.number().required(),
+        product_id: Joi.string().required(),
         product_quantity: Joi.number().required(),
         price: Joi.number().required(),
         product_name: Joi.string().required(),
