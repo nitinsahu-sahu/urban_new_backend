@@ -45,6 +45,7 @@ const product_offers = require("./private/product_offers/router_product_offers")
 const notification = require("./private/notification/router_notification");
 const payments = require("./private/payments/router_payments");
 const payment = require("./private/routes/payment.routes");
+const discount = require("./private/routes/discount.routes");
 const { handleUpload } = require("./private/upload/upload_file");
 const errorHandler = require("./private/methods/errorHandler");
 
@@ -85,6 +86,7 @@ app.use("/product_offers", product_offers);
 app.use("/notification", notification);
 app.use("/payments", payments);
 app.use("/payment", payment);
+app.use("/discount", discount);
 app.use("/wishlist", wishlist);
 app.post("/upload", upload.single("file"), handleUpload);
 

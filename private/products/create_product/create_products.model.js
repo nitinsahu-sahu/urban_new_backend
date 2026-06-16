@@ -8,7 +8,7 @@ const create_products_model = async (
   product_disc,
   product_key_feature,
   product_specification,
-      product_packaging,
+  product_packaging,
   product_sale_price,
   product_actual_price,
   category_id,
