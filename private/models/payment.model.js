@@ -9,10 +9,6 @@ const {
 } = require("../methods/payment/payment_methods");
 
 const update_webhook_data = async (paymentStatus, webhookData, paymentCompletedAt, orderId) => {
-  console.log("paymentStatus",paymentStatus);
-  console.log("webhookData",webhookData);
-  console.log("paymentCompletedAt",paymentCompletedAt);
-  console.log("orderId",orderId);
   
   try {
     const updateQuery = `
@@ -53,7 +49,6 @@ const update_webhook_data = async (paymentStatus, webhookData, paymentCompletedA
     ];
 
     const updateResult = await pool.query(updateQuery, updateValues);
-  console.log("updateResult",updateResult);
 
     if (updateResult.rows.length === 0) {
       console.error('❌ Payment record not found for orderId:', orderId);
@@ -64,7 +59,20 @@ const update_webhook_data = async (paymentStatus, webhookData, paymentCompletedA
     }
 
     const updatedPayment = updateResult.rows[0]; 
-  console.log("updatedPayment",updatedPayment);
+     const updateOrderAmount = `
+        UPDATE orders 
+        SET 
+          total_amount = $1,
+        WHERE 
+          order_id = $2
+      `;
+
+    const updateOrderValues = [
+      updatedPayment.amount,
+      updatedPayment.merchant_order_id
+    ];
+      const updateOrder = await pool.query(updateOrderAmount, updateOrderValues);
+
 
     return updatedPayment
 
