@@ -71,7 +71,7 @@ const update_webhook_data = async (paymentStatus, webhookData, paymentCompletedA
       updatedPayment.amount,
       updatedPayment.merchant_order_id
     ];
-      const updateResult = await pool.query(updateOrderAmount, updateOrderValues);
+      const updateOrder = await pool.query(updateOrderAmount, updateOrderValues);
 
 
     return updatedPayment
