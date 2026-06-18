@@ -293,7 +293,7 @@ exports.updateDiscount = async (req, res) => {
 // Get all discounts (Admin)
 exports.getAllDiscounts = async (req, res) => {
     try {
-        let { page = 1, limit = 20, isActive, search } = req.query;
+        let { page = 1, limit = 10, isActive, search } = req.query;
 
         page = parseInt(page);
         limit = parseInt(limit);
