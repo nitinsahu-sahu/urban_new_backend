@@ -62,7 +62,7 @@ const update_webhook_data = async (paymentStatus, webhookData, paymentCompletedA
      const updateOrderAmount = `
         UPDATE orders 
         SET 
-          total_amount = $1,
+          total_amount = $1
         WHERE 
           order_id = $2
       `;
@@ -71,7 +71,10 @@ const update_webhook_data = async (paymentStatus, webhookData, paymentCompletedA
       updatedPayment.amount,
       updatedPayment.merchant_order_id
     ];
+    console.log(updateOrderValues);
+    
       const updateOrder = await pool.query(updateOrderAmount, updateOrderValues);
+console.log("::",updateOrder);
 
 
     return updatedPayment
