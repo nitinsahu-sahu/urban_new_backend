@@ -4,12 +4,13 @@ const { pool } = require('../../../dbhelper');
 const { check_in_cart_model } = require('../../orders/check_in_cart/check_in_cart_model');
 
 exports.validateCoupon = async (req, res) => {
-  try {
-    const { code } = req.body;
-    const userId = req.user.user_id;
-    
-    // Step 1: Get cart items
-    const cartQuery = `
+
+    try {
+        const { code } = req.body;
+        const userId = req.user.user_id;
+
+        // Step 1: Get cart items
+        const cartQuery = `
       SELECT 
         o.*,
         json_array_elements(o.product) as product_item
@@ -18,91 +19,134 @@ exports.validateCoupon = async (req, res) => {
         AND o.status = 'IN_CART'
         AND o.is_deleted = false
     `;
-    
-    const cartResult = await pool.query(cartQuery, [userId]);
-    
-    if (cartResult.rows.length === 0) {
-      return sendResponse(res, false, "Cart is empty", null, 400);
-    }
-    
-    // Step 2: Calculate subtotal manually
-    let subtotal = 0;
-    const itemsForDiscount = [];
-    
-    for (const row of cartResult.rows) {
-      const item = row.product_item;
 
-      const price = parseFloat(item.price);
-      const quantity = parseInt(item.product_quantity);
-      subtotal += price * quantity;
-      
-      itemsForDiscount.push({
-        productId: item.product_id,
-        quantity: quantity,
-        priceSnapshot: price
-      });
+        const cartResult = await pool.query(cartQuery, [userId]);
+
+        if (cartResult.rows.length === 0) {
+            return sendResponse(res, false, "Cart is empty", null, 400);
+        }
+
+        // Step 2: Calculate subtotal manually
+        let subtotal = 0;
+        const itemsForDiscount = [];
+        const cartProductIds = [];
+        for (const row of cartResult.rows) {
+            const item = row.product_item;
+
+            const price = parseFloat(item.price);
+            const quantity = parseInt(item.product_quantity);
+            subtotal += price * quantity;
+            cartProductIds.push(item.product_id);
+            itemsForDiscount.push({
+                productId: item.product_id,
+                quantity: quantity,
+                priceSnapshot: price
+            });
+        }
+        console.log("subtotal", subtotal);
+        console.log("itemsForDiscount", itemsForDiscount);
+
+        // Step 3: Find discount
+        const discountResult = await discountModel.getDiscountByCode(code);
+
+        if (!discountResult.success || !discountResult.data) {
+            return sendResponse(res, false, "Invalid or expired coupon code", null, 400);
+        }
+
+        const discount = discountResult.data;
+        console.log("discount", discount);
+
+        // Step 4: Check if discount is active and not expired
+        const now = new Date();
+        if (!discount.is_active || discount.is_deleted) {
+            return sendResponse(res, false, "This coupon is not active", null, 400);
+        }
+        if (now < new Date(discount.start_date) || now > new Date(discount.end_date)) {
+            return sendResponse(res, false, "This coupon has expired or is not yet active", null, 400);
+        }
+
+        // Step 5: Check usage limit
+        if (discount.usage_limit && discount.used_count >= discount.usage_limit) {
+            return sendResponse(res, false, "Coupon usage limit exceeded", null, 400);
+        }
+
+        // Step 6: Check minimum order amount
+        if (subtotal < discount.min_order_amount) {
+            return sendResponse(res, false,
+                `Minimum order amount of ₹${discount.min_order_amount} required`,
+                null, 400);
+        }
+
+        // Step 6: Check user eligibility
+        const eligibilityResult = await discountModel.checkUserEligibility(discount.id, userId);
+        console.log("==>>", eligibilityResult);
+
+        if (!eligibilityResult.success || !eligibilityResult.isEligible) {
+            return sendResponse(res, false,
+                eligibilityResult.error || "You are not eligible for this coupon",
+                null, 400);
+        }
+
+        // Step 7: Validate product applicability
+        // Check if discount has specific product restrictions
+        const applicableIds = discount.applicable_ids && Array.isArray(discount.applicable_ids)
+            ? discount.applicable_ids
+            : [];
+
+        // If applicable_ids is not empty, validate that at least one product in cart matches
+        if (applicableIds.length > 0) {
+            // Check if any product in cart matches the applicable IDs
+            const hasMatchingProduct = cartProductIds.some(productId =>
+                applicableIds.includes(productId)
+            );
+
+            if (!hasMatchingProduct) {
+                return sendResponse(res, false,
+                    `This coupon is only applicable to specific products. None of the products in your cart are eligible.`,
+                    null, 400);
+            }
+
+            // Optional: Check if all items should be eligible (strict mode)
+            // Uncomment this if you want ALL products in cart to be eligible
+            // const allProductsEligible = cartProductIds.every(productId => 
+            //     applicableIds.includes(productId)
+            // );
+            // if (!allProductsEligible) {
+            //     return sendResponse(res, false, 
+            //         "This coupon is only applicable when all items in cart are eligible products", 
+            //         null, 400);
+            // }
+        }
+
+        // Step 8: Calculate discount
+        const discountCalculation = discountModel.calculateDiscount(
+            discount,
+            subtotal,
+            itemsForDiscount
+        );
+
+        const discountAmount = discountCalculation.discountAmount;
+        const finalAmount = discountCalculation.finalAmount;
+
+        // Step 8: Return success
+        return sendResponse(res, true, "Coupon applied successfully", {
+            discountId: discount.id,
+            code: discount.code,
+            name: discount.name,
+            discountType: discount.discount_type,
+            discountValue: discount.discount_value,
+            discountAmount: discountAmount,
+            finalAmount: finalAmount,
+            originalAmount: subtotal,
+            savings: discountAmount,
+            minOrderAmount: discount.min_order_amount,
+            isValid: true
+        }, 200);
+
+    } catch (error) {
+        console.error("Validate coupon error:", error);
+        return sendResponse(res, false, error.message || "Server Error", null, 500);
     }
-    
-    // Step 3: Find discount
-    const discountResult = await discountModel.getDiscountByCode(code);
-    
-    if (!discountResult.success || !discountResult.data) {
-      return sendResponse(res, false, "Invalid or expired coupon code", null, 400);
-    }
-    
-    const discount = discountResult.data;
-    
-    // Step 4: Check usage limit
-    if (discount.usage_limit && discount.used_count >= discount.usage_limit) {
-      return sendResponse(res, false, "Coupon usage limit exceeded", null, 400);
-    }
-    
-    // Step 5: Check minimum order amount
-    if (subtotal < discount.min_order_amount) {
-      return sendResponse(res, false, 
-        `Minimum order amount of ₹${discount.min_order_amount} required`, 
-        null, 400);
-    }
-    
-    // Step 6: Check user eligibility
-    const eligibilityResult = await discountModel.checkUserEligibility(discount.id, userId);
-    console.log("==>>",eligibilityResult);
-    
-    if (!eligibilityResult.success || !eligibilityResult.isEligible) {
-      return sendResponse(res, false, 
-        eligibilityResult.error || "You are not eligible for this coupon", 
-        null, 400);
-    }
-    
-    // Step 7: Calculate discount
-    const discountCalculation = discountModel.calculateDiscount(
-      discount, 
-      subtotal, 
-      itemsForDiscount
-    );
-    
-    const discountAmount = discountCalculation.discountAmount;
-    const finalAmount = discountCalculation.finalAmount;
-    
-    // Step 8: Return success
-    return sendResponse(res, true, "Coupon applied successfully", {
-      discountId: discount.id,
-      code: discount.code,
-      name: discount.name,
-      discountType: discount.discount_type,
-      discountValue: discount.discount_value,
-      discountAmount: discountAmount,
-      finalAmount: finalAmount,
-      originalAmount: subtotal,
-      savings: discountAmount,
-      minOrderAmount: discount.min_order_amount,
-      isValid: true
-    }, 200);
-    
-  } catch (error) {
-    console.error("Validate coupon error:", error);
-    return sendResponse(res, false, error.message || "Server Error", null, 500);
-  }
 };
 
 // Create discount (Admin)
@@ -207,87 +251,90 @@ exports.createDiscount = async (req, res) => {
 
 // Update discount (Admin)
 exports.updateDiscount = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
-    // Convert camelCase to snake_case for database
-    const dbUpdateData = {};
+    try {
+        const { id } = req.params;
+        const updateData = req.body;
 
-    if (updateData.code) {
-      dbUpdateData.code = updateData.code.toUpperCase();
-      
-      // Check if new code conflicts with existing
-      const existingDiscount = await discountModel.getDiscountByCode(dbUpdateData.code);
-      if (existingDiscount.success && existingDiscount.data && existingDiscount.data.id !== parseInt(id)) {
-        return sendResponse(res, false, "Discount code already exists", null, 409);
-      }
-      
+        // Convert camelCase to snake_case for database
+        const dbUpdateData = {};
+
+        // Handle code separately with validation
+        if (updateData.code) {
+            dbUpdateData.code = updateData.code.toUpperCase();
+
+            // Check if new code conflicts with existing
+            const existingDiscount = await discountModel.getDiscountByCode(dbUpdateData.code);
+            if (existingDiscount.success && existingDiscount.data && existingDiscount.data.id !== parseInt(id)) {
+                return sendResponse(res, false, "Discount code already exists", null, 409);
+            }
+        }
+
+        // Map all possible fields
+        const fieldMapping = {
+            name: 'name',
+            description: 'description',
+            discountType: 'discount_type',
+            discountValue: 'discount_value',
+            minOrderAmount: 'min_order_amount',
+            maxDiscountAmount: 'max_discount_amount',
+            usageLimit: 'usage_limit',
+            perUserLimit: 'per_user_limit',
+            startDate: 'start_date',
+            endDate: 'end_date',
+            isActive: 'is_active',
+            stackable: 'stackable',
+            priority: 'priority',
+            firstPurchaseOnly: 'first_purchase_only',
+            newUserOnly: 'new_user_only',
+            applicableTo: 'applicable_to',
+            applicableModel: 'applicable_model',
+        };
+
+        for (const [key, dbKey] of Object.entries(fieldMapping)) {
+            if (updateData[key] !== undefined) {
+                dbUpdateData[dbKey] = updateData[key];
+            }
+        }
+
+        // Handle array fields - these will be processed by the model
+        if (updateData.applicableIds !== undefined) {
+            dbUpdateData.applicable_ids = updateData.applicableIds;
+        }
+        if (updateData.eligibleUsers !== undefined) {
+            dbUpdateData.eligible_users = updateData.eligibleUsers;
+        }
+        if (updateData.excludedUsers !== undefined) {
+            dbUpdateData.excluded_users = updateData.excludedUsers;
+        }
+        if (updateData.metadata !== undefined) {
+            dbUpdateData.metadata = updateData.metadata;
+        }
+
+        // Handle buy_x_get_y if needed
+        if (updateData.buyXGetY) {
+            if (updateData.buyXGetY.buyQuantity !== undefined) {
+                dbUpdateData.buy_quantity = updateData.buyXGetY.buyQuantity;
+            }
+            if (updateData.buyXGetY.getQuantity !== undefined) {
+                dbUpdateData.get_quantity = updateData.buyXGetY.getQuantity;
+            }
+            if (updateData.buyXGetY.applicableProductIds !== undefined) {
+                dbUpdateData.applicable_product_ids = updateData.buyXGetY.applicableProductIds;
+            }
+        }
+
+        const result = await discountModel.updateDiscount(id, dbUpdateData);
+
+        if (!result.success) {
+            return sendResponse(res, false, result.error, null, 404);
+        }
+
+        return sendResponse(res, true, "Discount updated successfully", result.data, 200);
+
+    } catch (error) {
+        console.error("Update discount error:", error);
+        return sendResponse(res, false, error.message || "Server Error", null, 500);
     }
-
-    // Map all possible fields
-    const fieldMapping = {
-      name: 'name',
-      description: 'description',
-      discountType: 'discount_type',
-      discountValue: 'discount_value',
-      minOrderAmount: 'min_order_amount',
-      maxDiscountAmount: 'max_discount_amount',
-      usageLimit: 'usage_limit',
-      perUserLimit: 'per_user_limit',
-      startDate: 'start_date',
-      endDate: 'end_date',
-      isActive: 'is_active',
-      stackable: 'stackable',
-      priority: 'priority',
-      firstPurchaseOnly: 'first_purchase_only',
-      newUserOnly: 'new_user_only',
-      applicableTo: 'applicable_to',
-      applicableModel: 'applicable_model',
-      metadata: 'metadata'
-    };
-
-    for (const [key, dbKey] of Object.entries(fieldMapping)) {
-      if (updateData[key] !== undefined) {
-        dbUpdateData[dbKey] = updateData[key];
-      }
-    }
-
-    // Handle array fields
-    if (updateData.applicableIds) {
-      dbUpdateData.applicable_ids = updateData.applicableIds;
-    }
-    if (updateData.eligibleUsers) {
-      dbUpdateData.eligible_users = updateData.eligibleUsers;
-    }
-    if (updateData.excludedUsers) {
-      dbUpdateData.excluded_users = updateData.excludedUsers;
-    }
-
-    // Handle buy_x_get_y
-    if (updateData.buyXGetY) {
-      if (updateData.buyXGetY.buyQuantity) {
-        dbUpdateData.buy_quantity = updateData.buyXGetY.buyQuantity;
-      }
-      if (updateData.buyXGetY.getQuantity) {
-        dbUpdateData.get_quantity = updateData.buyXGetY.getQuantity;
-      }
-      if (updateData.buyXGetY.applicableProductIds) {
-        dbUpdateData.applicable_product_ids = updateData.buyXGetY.applicableProductIds;
-      }
-    }
-
-    const result = await discountModel.updateDiscount(id, dbUpdateData);
-
-    if (!result.success) {
-      return sendResponse(res, false, result.error, null, 404);
-    }
-
-    return sendResponse(res, true, "Discount updated successfully", result.data, 200);
-
-  } catch (error) {
-    console.error("Update discount error:", error);
-    return sendResponse(res, false, error.message || "Server Error", null, 500);
-  }
 };
 
 // Get all discounts (Admin)
@@ -382,3 +429,126 @@ exports.getDiscountById = async (req, res) => {
     }
 };
 
+exports.deleteDiscount = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Validate ID
+        if (!id) {
+            return sendResponse(res, false, "Discount ID is required", null, 400);
+        }
+
+        // Check if discount exists
+        const existingDiscount = await discountModel.getDiscountById(id);
+        if (!existingDiscount.success || !existingDiscount.data) {
+            return sendResponse(res, false, "Discount not found", null, 404);
+        }
+
+        // Check if discount is already deleted
+        if (existingDiscount.data.is_deleted) {
+            return sendResponse(res, false, "Discount is already deleted", null, 400);
+        }
+
+        // Perform soft delete
+        const result = await discountModel.deleteDiscount(id);
+
+        if (!result.success) {
+            return sendResponse(res, false, result.error || "Failed to delete discount", null, 500);
+        }
+
+        return sendResponse(res, true, "Discount deleted successfully", result.data, 200);
+
+    } catch (error) {
+        console.error("Delete discount error:", error);
+        return sendResponse(res, false, error.message || "Server Error", null, 500);
+    }
+};
+
+// Permanent delete (hard delete) - use with caution
+exports.permanentDeleteDiscount = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Validate ID
+        if (!id) {
+            return sendResponse(res, false, "Discount ID is required", null, 400);
+        }
+
+        // Check if discount exists
+        const existingDiscount = await discountModel.getDiscountById(id);
+        if (!existingDiscount.success || !existingDiscount.data) {
+            return sendResponse(res, false, "Discount not found", null, 404);
+        }
+
+        // Perform permanent delete
+        const result = await discountModel.permanentDeleteDiscount(id);
+
+        if (!result.success) {
+            return sendResponse(res, false, result.error || "Failed to permanently delete discount", null, 500);
+        }
+
+        return sendResponse(res, true, "Discount permanently deleted successfully", result.data, 200);
+
+    } catch (error) {
+        console.error("Permanent delete discount error:", error);
+        return sendResponse(res, false, error.message || "Server Error", null, 500);
+    }
+};
+
+// Restore deleted discount
+exports.restoreDiscount = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Validate ID
+        if (!id) {
+            return sendResponse(res, false, "Discount ID is required", null, 400);
+        }
+
+        // Check if discount exists and is deleted
+        const existingDiscount = await discountModel.getDiscountById(id);
+        if (!existingDiscount.success || !existingDiscount.data) {
+            return sendResponse(res, false, "Discount not found", null, 404);
+        }
+
+        if (!existingDiscount.data.is_deleted) {
+            return sendResponse(res, false, "Discount is not deleted", null, 400);
+        }
+
+        // Restore discount
+        const result = await discountModel.restoreDiscount(id);
+
+        if (!result.success) {
+            return sendResponse(res, false, result.error || "Failed to restore discount", null, 500);
+        }
+
+        return sendResponse(res, true, "Discount restored successfully", result.data, 200);
+
+    } catch (error) {
+        console.error("Restore discount error:", error);
+        return sendResponse(res, false, error.message || "Server Error", null, 500);
+    }
+};
+
+// Get deleted discounts
+exports.getDeletedDiscounts = async (req, res) => {
+    try {
+        const { page = 1, limit = 10, search = '' } = req.query;
+
+        const result = await discountModel.getDeletedDiscounts(
+            parseInt(page),
+            parseInt(limit),
+            search
+        );
+
+        if (!result.success) {
+            return sendResponse(res, false, result.error || "Failed to fetch deleted discounts", null, 500);
+        }
+
+        return sendResponse(res, true, "Deleted discounts fetched successfully", result.data, 200);
+
+    } catch (error) {
+        console.error("Get deleted discounts error:", error);
+        return sendResponse(res, false, error.message || "Server Error", null, 500);
+    }
+};
