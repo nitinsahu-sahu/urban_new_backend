@@ -3,21 +3,39 @@ const { pool } = require("../../dbhelper");
 
 const discountModel = {
     // Create discount
-    createDiscount: async (discountData) => {
+   createDiscount: async (discountData) => {
         
-        try {
-            const {
-                code, name, description, discount_type, discount_value,
-                applicable_to, applicable_ids, applicable_model,
-                min_order_amount, max_discount_amount, usage_limit,
-                per_user_limit, eligible_users, excluded_users,
-                start_date, end_date, is_active, stackable, priority,
-                first_purchase_only, new_user_only, created_by, metadata
-            } = discountData;
-console.log(created_by);
+    try {
+        const {
+            code, name, description, discount_type, discount_value,
+            applicable_to, applicable_ids, applicable_model,
+            min_order_amount, max_discount_amount, usage_limit,
+            per_user_limit, eligible_users, excluded_users,
+            start_date, end_date, is_active, stackable, priority,
+            first_purchase_only, new_user_only, created_by, metadata
+        } = discountData;
 
-            // Count: 24 columns (including metadata)
-            const query = `
+        console.log(created_by);
+
+        // Convert arrays to proper JSON format for PostgreSQL
+        const jsonApplicableIds = applicable_ids && applicable_ids.length > 0 
+            ? JSON.stringify(applicable_ids) 
+            : JSON.stringify([]);
+        
+        const jsonEligibleUsers = eligible_users && eligible_users.length > 0 
+            ? JSON.stringify(eligible_users) 
+            : JSON.stringify([]);
+        
+        const jsonExcludedUsers = excluded_users && excluded_users.length > 0 
+            ? JSON.stringify(excluded_users) 
+            : JSON.stringify([]);
+        
+        const jsonMetadata = metadata && Object.keys(metadata).length > 0 
+            ? JSON.stringify(metadata) 
+            : JSON.stringify({});
+
+        // Count: 24 columns (including metadata)
+        const query = `
         INSERT INTO discounts (
           code, name, description, discount_type, discount_value,
           applicable_to, applicable_ids, applicable_model,
@@ -25,82 +43,44 @@ console.log(created_by);
           per_user_limit, eligible_users, excluded_users,
           start_date, end_date, is_active, stackable, priority,
           first_purchase_only, new_user_only, created_by, metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb)
         RETURNING *
       `;
 
-            // 24 values matching the columns
-            const values = [
-                code,                           // $1
-                name,                           // $2
-                description,                    // $3
-                discount_type,                  // $4
-                discount_value,                 // $5
-                applicable_to || 'product',     // $6
-                applicable_ids || [],           // $7
-                applicable_model || 'product',  // $8
-                min_order_amount || 0,          // $9
-                max_discount_amount || null,    // $10
-                usage_limit || null,            // $11
-                per_user_limit || 1,            // $12
-                eligible_users || [],           // $13
-                excluded_users || [],           // $14
-                start_date,                     // $15
-                end_date,                       // $16
-                is_active !== undefined ? is_active : true,  // $17
-                stackable || false,             // $18
-                priority || 0,                  // $19
-                first_purchase_only || false,   // $20
-                new_user_only || false,         // $21
-                created_by,                     // $22
-                metadata || {}                  // $23
-            ];
+        // 24 values matching the columns
+        const values = [
+            code,                           // $1
+            name,                           // $2
+            description,                    // $3
+            discount_type,                  // $4
+            discount_value,                 // $5
+            applicable_to || 'product',     // $6
+            jsonApplicableIds,              // $7 - Now properly JSON stringified
+            applicable_model || 'product',  // $8
+            min_order_amount || 0,          // $9
+            max_discount_amount || null,    // $10
+            usage_limit || null,            // $11
+            per_user_limit || 1,            // $12
+            jsonEligibleUsers,              // $13 - Now properly JSON stringified
+            jsonExcludedUsers,              // $14 - Now properly JSON stringified
+            start_date,                     // $15
+            end_date,                       // $16
+            is_active !== undefined ? is_active : true,  // $17
+            stackable || false,             // $18
+            priority || 0,                  // $19
+            first_purchase_only || false,   // $20
+            new_user_only || false,         // $21
+            created_by,                     // $22
+            jsonMetadata                    // $23 - Now properly JSON stringified
+        ];
 
-            const result = await pool.query(query, values);
-            return { success: true, data: result.rows[0] };
-        } catch (error) {
-            console.error("Create discount error:", error);
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Get discount by ID
-    getDiscountById: async (id) => {
-        try {
-            const query = 'SELECT * FROM discounts WHERE id = $1 AND is_deleted = false';
-            const result = await pool.query(query, [id]);
-
-            if (result.rows.length === 0) {
-                return { success: false, error: "Discount not found" };
-            }
-
-            // Get usage statistics
-            const statsQuery = `
-        SELECT 
-          COUNT(*) as total_used,
-          SUM(discount_amount) as total_discount_given,
-          COUNT(DISTINCT user_id) as unique_users
-        FROM discount_usage 
-        WHERE discount_id = $1 AND is_successful = true
-      `;
-            const statsResult = await pool.query(statsQuery, [id]);
-
-            return {
-                success: true,
-                data: {
-                    ...result.rows[0],
-                    usageStats: {
-                        totalUsed: parseInt(statsResult.rows[0].total_used),
-                        totalDiscountGiven: parseFloat(statsResult.rows[0].total_discount_given) || 0,
-                        uniqueUsers: parseInt(statsResult.rows[0].unique_users)
-                    }
-                }
-            };
-        } catch (error) {
-            console.error("Get discount by ID error:", error);
-            return { success: false, error: error.message };
-        }
-    },
+        const result = await pool.query(query, values);
+        return { success: true, data: result.rows[0] };
+    } catch (error) {
+        console.error("Create discount error:", error);
+        return { success: false, error: error.message };
+    }
+},
 
     // Get discount by code
     getDiscountByCode: async (code) => {
@@ -361,36 +341,105 @@ console.log(created_by);
 
     // Update discount
     updateDiscount: async (id, updateData) => {
+    try {
+        // Helper function to safely stringify JSON
+        const toJSON = (value, defaultValue = []) => {
+            if (value === null || value === undefined) {
+                return JSON.stringify(defaultValue);
+            }
+            // If it's already a string, check if it's valid JSON
+            if (typeof value === 'string') {
+                try {
+                    JSON.parse(value);
+                    return value; // Already valid JSON
+                } catch {
+                    return JSON.stringify(defaultValue);
+                }
+            }
+            // If it's an array or object, stringify it
+            return JSON.stringify(value);
+        };
+
+        // Clone the updateData to avoid modifying the original
+        const processedData = { ...updateData };
+
+        // Process JSON fields - convert arrays/objects to JSON strings
+        const jsonFields = ['applicable_ids', 'eligible_users', 'excluded_users', 'metadata'];
+        
+        jsonFields.forEach(field => {
+            if (processedData[field] !== undefined) {
+                // If the field exists, convert it to JSON string
+                if (Array.isArray(processedData[field])) {
+                    processedData[field] = JSON.stringify(processedData[field]);
+                } else if (typeof processedData[field] === 'object' && processedData[field] !== null) {
+                    processedData[field] = JSON.stringify(processedData[field]);
+                }
+                // If it's already a string, leave it as is
+            }
+        });
+
+        // Build the SET clause with proper JSONB casting
+        const setClause = Object.keys(processedData)
+            .map((key, index) => {
+                // Add ::jsonb cast for JSON fields
+                if (jsonFields.includes(key)) {
+                    return `${key} = $${index + 2}::jsonb`;
+                }
+                return `${key} = $${index + 2}`;
+            })
+            .join(', ');
+
+        const values = [id, ...Object.values(processedData)];
+        const query = `UPDATE discounts SET ${setClause} WHERE id = $1 AND is_deleted = false RETURNING *`;
+
+        const result = await pool.query(query, values);
+
+        if (result.rows.length === 0) {
+            return { success: false, error: "Discount not found" };
+        }
+
+        return { success: true, data: result.rows[0] };
+    } catch (error) {
+        console.error("Update discount error:", error);
+        return { success: false, error: error.message };
+    }
+},
+
+    // Soft delete discount
+    deleteDiscount: async (id) => {
+        
         try {
-            const setClause = Object.keys(updateData)
-                .map((key, index) => `${key} = $${index + 2}`)
-                .join(', ');
+            const query = `
+                UPDATE discounts 
+                SET 
+                    is_deleted = true,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1 
+                AND is_deleted = false
+                RETURNING *
+            `;
 
-            const values = [id, ...Object.values(updateData)];
-            const query = `UPDATE discounts SET ${setClause} WHERE id = $1 AND is_deleted = false RETURNING *`;
-
-            const result = await pool.query(query, values);
+            const result = await pool.query(query, [id]);
 
             if (result.rows.length === 0) {
-                return { success: false, error: "Discount not found" };
+                return { success: false, error: "Discount not found or already deleted" };
             }
 
             return { success: true, data: result.rows[0] };
         } catch (error) {
-            console.error("Update discount error:", error);
+            console.error("Delete discount error:", error);
             return { success: false, error: error.message };
         }
     },
 
-    // Delete discount (soft delete)
-    deleteDiscount: async (id) => {
+    // Permanent delete (hard delete)
+    permanentDeleteDiscount: async (id) => {
         try {
             const query = `
-        UPDATE discounts 
-        SET is_deleted = true, is_active = false 
-        WHERE id = $1 
-        RETURNING *
-      `;
+                DELETE FROM discounts 
+                WHERE id = $1 
+                RETURNING *
+            `;
 
             const result = await pool.query(query, [id]);
 
@@ -400,7 +449,178 @@ console.log(created_by);
 
             return { success: true, data: result.rows[0] };
         } catch (error) {
-            console.error("Delete discount error:", error);
+            console.error("Permanent delete discount error:", error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Restore soft-deleted discount
+    restoreDiscount: async (id) => {
+        try {
+            const query = `
+                UPDATE discounts 
+                SET 
+                    is_deleted = false,
+                    deleted_at = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1 
+                AND is_deleted = true
+                RETURNING *
+            `;
+
+            const result = await pool.query(query, [id]);
+
+            if (result.rows.length === 0) {
+                return { success: false, error: "Discount not found or not deleted" };
+            }
+
+            return { success: true, data: result.rows[0] };
+        } catch (error) {
+            console.error("Restore discount error:", error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get all deleted discounts
+    getDeletedDiscounts: async (page = 1, limit = 10, search = '') => {
+        try {
+            const offset = (page - 1) * limit;
+            let query = `
+                SELECT 
+                    id, code, name, description, discount_type, discount_value,
+                    applicable_to, applicable_ids, applicable_model,
+                    min_order_amount, max_discount_amount, usage_limit,
+                    per_user_limit, start_date, end_date, is_active,
+                    usage_count, created_by, created_at, deleted_at
+                FROM discounts 
+                WHERE is_deleted = true
+            `;
+
+            const values = [];
+            let paramCount = 1;
+
+            if (search) {
+                query += ` AND (code ILIKE $${paramCount} OR name ILIKE $${paramCount})`;
+                values.push(`%${search}%`);
+                paramCount++;
+            }
+
+            query += ` ORDER BY deleted_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+            values.push(limit, offset);
+
+            const result = await pool.query(query, values);
+
+            // Get total count
+            let countQuery = `SELECT COUNT(*) FROM discounts WHERE is_deleted = true`;
+            if (search) {
+                countQuery += ` AND (code ILIKE $1 OR name ILIKE $1)`;
+            }
+            const countResult = await pool.query(
+                countQuery, 
+                search ? [`%${search}%`] : []
+            );
+
+            return {
+                success: true,
+                data: {
+                    discounts: result.rows,
+                    total: parseInt(countResult.rows[0].count),
+                    page,
+                    limit,
+                    totalPages: Math.ceil(parseInt(countResult.rows[0].count) / limit)
+                }
+            };
+        } catch (error) {
+            console.error("Get deleted discounts error:", error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get discount by ID (including soft-deleted)
+    getDiscountById: async (id) => {
+        try {
+            const query = `
+                SELECT * FROM discounts WHERE id = $1
+            `;
+            const result = await pool.query(query, [id]);
+
+            if (result.rows.length === 0) {
+                return { success: true, data: null };
+            }
+
+            return { success: true, data: result.rows[0] };
+        } catch (error) {
+            console.error("Get discount by ID error:", error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Bulk delete (soft delete)
+    bulkDeleteDiscounts: async (ids) => {
+        try {
+            if (!ids || ids.length === 0) {
+                return { success: false, error: "No IDs provided" };
+            }
+
+            const placeholders = ids.map((_, index) => `$${index + 1}`).join(', ');
+            
+            const query = `
+                UPDATE discounts 
+                SET 
+                    is_deleted = true,
+                    deleted_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id IN (${placeholders}) 
+                AND is_deleted = false
+                RETURNING id
+            `;
+
+            const result = await pool.query(query, ids);
+
+            return {
+                success: true,
+                data: {
+                    affected: result.rows.length,
+                    ids: result.rows.map(row => row.id)
+                }
+            };
+        } catch (error) {
+            console.error("Bulk delete discounts error:", error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Bulk restore
+    bulkRestoreDiscounts: async (ids) => {
+        try {
+            if (!ids || ids.length === 0) {
+                return { success: false, error: "No IDs provided" };
+            }
+
+            const placeholders = ids.map((_, index) => `$${index + 1}`).join(', ');
+            
+            const query = `
+                UPDATE discounts 
+                SET 
+                    is_deleted = false,
+                    deleted_at = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id IN (${placeholders}) 
+                AND is_deleted = true
+                RETURNING id
+            `;
+
+            const result = await pool.query(query, ids);
+
+            return {
+                success: true,
+                data: {
+                    affected: result.rows.length,
+                    ids: result.rows.map(row => row.id)
+                }
+            };
+        } catch (error) {
+            console.error("Bulk restore discounts error:", error);
             return { success: false, error: error.message };
         }
     },

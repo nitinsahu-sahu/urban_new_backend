@@ -14,6 +14,19 @@ router.use(isAuth);
 
 // Public routes
 router.post('/validate', discountController.validateCoupon);
+router.get('/all', discountController.getAllDiscounts);
+router.get('/:id', discountController.getDiscountById);
+router.put('/:id', discountController.updateDiscount);
+router.post('/', discountController.createDiscount);
+
+// Delete Routes
+router.delete('/:id', discountController.deleteDiscount); // Soft delete
+router.delete('/permanent/:id', discountController.permanentDeleteDiscount); // Hard delete
+router.post('/restore/:id', discountController.restoreDiscount); // Restore soft-deleted
+
+// Get deleted discounts
+router.get('/deleted/all', discountController.getDeletedDiscounts);
+
 // router.post('/validate', validateMiddleware(validateCouponSchema), discountController.validateCoupon);
 
 // User routes
@@ -22,11 +35,8 @@ router.post('/validate', discountController.validateCoupon);
 
 // Admin routes
 // router.use(isAdmin);
-router.post('/', discountController.createDiscount);
 // router.post('/', validateMiddleware(createDiscountSchema), discountController.createDiscount);
-router.get('/all', discountController.getAllDiscounts);
-router.get('/:id', discountController.getDiscountById);
-router.put('/:id', discountController.updateDiscount);
+
 // router.put('/:id', validateMiddleware(updateDiscountSchema), discountController.updateDiscount);
 // router.delete('/:id', discountController.deleteDiscount);
 // router.post('/:id/toggle-status', discountController.toggleDiscountStatus);
