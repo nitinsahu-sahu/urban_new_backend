@@ -46,7 +46,7 @@
 //     </html>`;
 //     const emailParams = {
 //       app_id: "bbe652be-fe38-47cb-b781-34424893fafc", // Your OneSignal App ID
-//       email_subject: "Welcome to Shri Ram Dental Depot! Your OTP!",
+//       email_subject: "Welcome to Urban Dental System! Your OTP!",
 //       email_body: emailHtml,
 //       include_email_tokens: [email], // Recipient's email address
 //     };
@@ -139,7 +139,7 @@ const send_mail = async (email, otp) => {
     const mailOptions = {
       from: "urbandentalsystem@gmail.com", // Replace with your email address
       to: email,
-      subject: "Welcome to Shri Ram Dental Depot! Your OTP!",
+      subject: "Welcome to Urban Dental System! Your OTP!",
       html: emailHtml,
     };
 
@@ -217,7 +217,7 @@ const send_forget_password_mail = async (email, otp) => {
     const mailOptions = {
       from: "urbandentalsystem@gmail.com", // Replace with your email address
       to: email,
-      subject: "Shri Ram Dental Depot - Password Reset OTP",
+      subject: "Urban Dental System - Password Reset OTP",
       html: emailHtml,
     };
 
