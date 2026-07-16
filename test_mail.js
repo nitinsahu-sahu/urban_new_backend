@@ -6,14 +6,14 @@ let transporter = nodemailer.createTransport({
   port: 465, // Use 465 for SSL
   secure: true, // Set to true if using port 465
   auth: {
-    user: "Shriramdentaldepot2@gmail.com",
-    pass: "aqlw xiex xdem zkdh",
+    user: "urbandentalsystem@gmail.com",
+    pass: "gapn rjnc jhma hvoy",
   },
 });
 
 // Setup email data
 let mailOptions = {
-  from: '"Your Name" Shriramdentaldepot2@gmail.com', // sender address
+  from: '"Your Name" urbandentalsystem@gmail.com', // sender address
   to: "sharwanagarwal69@gmail.com", // list of receivers
   subject: "Hello ✔", // Subject line
   text: "Hello world?", // plain text body

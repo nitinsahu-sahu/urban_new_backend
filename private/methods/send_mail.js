@@ -87,8 +87,8 @@ const send_mail = async (email, otp) => {
       port: 465, // Use 465 for SSL
       secure: true, // Set to true if using port 465
       auth: {
-        user: "Shriramdentaldepot2@gmail.com",
-        pass: "aqlw xiex xdem zkdh",
+        user: "urbandentalsystem@gmail.com",
+        pass: "gapn rjnc jhma hvoy",
       },
     });
 
@@ -137,7 +137,7 @@ const send_mail = async (email, otp) => {
 
     // Define email options
     const mailOptions = {
-      from: "Shriramdentaldepot2@gmail.com", // Replace with your email address
+      from: "urbandentalsystem@gmail.com", // Replace with your email address
       to: email,
       subject: "Welcome to Shri Ram Dental Depot! Your OTP!",
       html: emailHtml,
@@ -162,8 +162,8 @@ const send_forget_password_mail = async (email, otp) => {
       port: 465, // Use 465 for SSL
       secure: true, // Set to true if using port 465
       auth: {
-        user: "Shriramdentaldepot2@gmail.com",
-        pass: "aqlw xiex xdem zkdh",
+        user: "urbandentalsystem@gmail.com",
+        pass: "gapn rjnc jhma hvoy",
       },
     });
 
@@ -215,7 +215,7 @@ const send_forget_password_mail = async (email, otp) => {
 
     // Define email options
     const mailOptions = {
-      from: "Shriramdentaldepot2@gmail.com", // Replace with your email address
+      from: "urbandentalsystem@gmail.com", // Replace with your email address
       to: email,
       subject: "Shri Ram Dental Depot - Password Reset OTP",
       html: emailHtml,

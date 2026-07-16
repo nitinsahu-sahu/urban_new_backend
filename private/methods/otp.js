@@ -8,7 +8,7 @@ const jwt = require("jsonwebtoken");
 const send_otp = async (email, access_type) => {
   try {
     let otp = generateRandom4DigitNumber();
-    if (email === "shriramdentaldepot@gmail.com" && access_type === "APP") {
+    if (email === "urbandentalsystem@gmail.com" && access_type === "APP") {
       otp = 9999;
     }
     const mail_res = await send_mail(email, otp);
