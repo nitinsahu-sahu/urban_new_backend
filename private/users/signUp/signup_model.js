@@ -3,15 +3,18 @@ const { random_number } = require("../../methods/random_number");
 const { current_epoch_time } = require("../../methods/current_epoch_time");
 const bcrypt = require("bcryptjs");
 
-const signup_user_model = async (full_name, email, password) => {
+const signup_user_model = async (full_name, email, password, phone) => {
   try {
     const created_at = current_epoch_time();
     const user_id = random_number();
 
-    // Check if the email already exists
+    // Check if email already exists
     const check_mail_query = "SELECT * FROM users WHERE email = $1";
     const check_mail_value = [email];
-    const check_mail_result = await pool.query(check_mail_query, check_mail_value);
+    const check_mail_result = await pool.query(
+      check_mail_query,
+      check_mail_value
+    );
 
     if (check_mail_result.rows.length > 0) {
       return {
@@ -20,18 +23,44 @@ const signup_user_model = async (full_name, email, password) => {
       };
     }
 
-    // Hash the password before saving
+    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Insert new user
     const query = `
       INSERT INTO public.users (
-        full_name, email, password, created_at, is_active, is_deleted, user_id
-      ) VALUES ($1, $2, $3, $4, true, false, $5)
+        full_name,
+        email,
+        password,
+        phone,
+        created_at,
+        is_active,
+        is_deleted,
+        user_id
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        true,
+        false,
+        $6
+      )
       RETURNING *;
     `;
-    const values = [full_name, email, hashedPassword, created_at, user_id];
+
+    const values = [
+      full_name,
+      email,
+      hashedPassword,
+      phone,
+      created_at,
+      user_id,
+    ];
+
     const result = await pool.query(query, values);
 
     if (result.rows.length > 0) {
@@ -48,9 +77,10 @@ const signup_user_model = async (full_name, email, password) => {
     }
   } catch (err) {
     console.error("Error in signup_user_model:", err);
+
     return {
       success: false,
-      error: "An unexpected error occurred during signup.",
+      error: err.message, // Debugging ke liye
     };
   }
 };

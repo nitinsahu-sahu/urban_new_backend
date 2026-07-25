@@ -18,6 +18,8 @@ const signup_user_auth = Joi.object({
   full_name: Joi.string().required(),
   email: Joi.string().email().required(),
   password: Joi.string().required(),
+  phone: Joi.string().pattern(/^\d{10}$/).required(),
+
 });
 const login_user_auth = Joi.object({
   password: Joi.string().required(),

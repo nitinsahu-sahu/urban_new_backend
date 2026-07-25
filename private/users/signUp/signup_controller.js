@@ -4,9 +4,14 @@ const { signup_user_auth } = require("../validation_users");
 const signup_user_controller = async (request, response, next) => {
   try {
     await signup_user_auth.validateAsync(request.body);
-    const { full_name, email, password } = request.body;
+    const { full_name, email, password, phone } = request.body;
 
-    const res = await signup_user_model(full_name, email, password);
+    const res = await signup_user_model(
+  full_name,
+  email,
+  password,
+  phone
+);
     if (res.success) {
       response.status(200).json({
         ...res,
