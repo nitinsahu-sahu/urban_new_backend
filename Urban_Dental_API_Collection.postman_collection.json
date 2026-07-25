@@ -1,0 +1,437 @@
+{
+  "info": {
+    "name": "Urban Dental API Collection - Complete CRUD APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Complete collection of all CRUD APIs created today including Home Banner, Product Offers, Notification, and Forget Password"
+  },
+  "item": [
+    {
+      "name": "Home Banner APIs",
+      "item": [
+        {
+          "name": "Get Home Banners",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3000/home_banner?page=1&limit=10&banner_id=123&search=banner",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["home_banner"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "banner_id",
+                  "value": "123"
+                },
+                {
+                  "key": "search",
+                  "value": "banner"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Home Banner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true,\n  \"banners\": \"https://example.com/banner.jpg\",\n  \"title\": \"Welcome Banner\",\n  \"description\": \"Main homepage banner\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/home_banner",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["home_banner"]
+            }
+          }
+        },
+        {
+          "name": "Update Home Banner",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"banner_id\": 123,\n  \"is_active\": false,\n  \"banners\": \"https://example.com/updated-banner.jpg\",\n  \"title\": \"Updated Title\",\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/home_banner",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["home_banner"]
+            }
+          }
+        },
+        {
+          "name": "Delete Home Banner",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3000/home_banner/123",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["home_banner", "123"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Product Offers APIs",
+      "item": [
+        {
+          "name": "Get Product Offers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3000/product_offers?product_id=123&active=true&page=1&limit=10",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["product_offers"],
+              "query": [
+                {
+                  "key": "product_id",
+                  "value": "123"
+                },
+                {
+                  "key": "active",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Product Offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": 123,\n  \"on_buy\": 2,\n  \"off_no\": 10,\n  \"off_type\": \"percentage\",\n  \"active\": true,\n  \"buy_now\": 1,\n  \"get_now\": 1\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/product_offers",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["product_offers"]
+            }
+          }
+        },
+        {
+          "name": "Update Product Offer",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"offer_id\": 123,\n  \"product_id\": 456,\n  \"on_buy\": 3,\n  \"off_no\": 15,\n  \"off_type\": \"percentage\",\n  \"active\": false,\n  \"buy_now\": 2,\n  \"get_now\": 1\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/product_offers",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["product_offers"]
+            }
+          }
+        },
+        {
+          "name": "Delete Product Offer",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3000/product_offers/123",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["product_offers", "123"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notification APIs",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3000/notification?is_active=true&page=1&limit=10&search=product",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["notification"],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "search",
+                  "value": "product"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"New Product Launch!\",\n  \"description\": \"Check out our latest dental care products\",\n  \"is_active\": true,\n  \"offer_image\": \"https://example.com/notification.jpg\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/notification",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["notification"]
+            }
+          }
+        },
+        {
+          "name": "Update Notification",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"not_id\": 123,\n  \"title\": \"Updated Product Launch!\",\n  \"description\": \"Updated description for our products\",\n  \"is_active\": false,\n  \"offer_image\": \"https://example.com/updated-notification.jpg\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/notification",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["notification"]
+            }
+          }
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer YOUR_JWT_TOKEN",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3000/notification/123",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["notification", "123"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Forget Password APIs",
+      "item": [
+        {
+          "name": "Forget Password (Send OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/users/forget-password",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["users", "forget-password"]
+            }
+          }
+        },
+        {
+          "name": "Reset Password (Verify OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"otp\": \"1234\",\n  \"new_password\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/users/reset-password",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["users", "reset-password"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "YOUR_JWT_TOKEN",
+      "type": "string"
+    }
+  ]
+}
