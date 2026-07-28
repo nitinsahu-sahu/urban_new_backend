@@ -45,6 +45,15 @@ const reset_password_auth = Joi.object({
   otp: Joi.string().pattern(/^[0-9]{4}$/).required(),
   new_password: Joi.string().min(6).required(),
 });
+const send_phone_otp_auth = Joi.object({
+  phone: Joi.string()
+    .pattern(/^\d{10}$/)
+    .required(),
+});
+const verify_phone_otp_auth = Joi.object({
+  verificationId: Joi.string().required(),
+  otp: Joi.string().length(4).required(),
+});
 
 module.exports = {
   create_user_auth,
@@ -55,4 +64,6 @@ module.exports = {
   forget_password_auth,
   verify_forget_otp_auth,
   reset_password_auth,
+  send_phone_otp_auth,
+  verify_phone_otp_auth
 };
