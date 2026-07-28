@@ -1,11 +1,17 @@
 const { verifyPhoneOtp } = require("../../../methods/message_central");
 const { pool } = require("../../../../dbhelper");
 const { createLoginSession } = require("../newLogin_model");
+const { isReviewOtp, reviewPhone } = require("./review_otp_config");
 
 const verify_phone_otp_model = async (verificationId, otp) => {
   try {
-    const response = await verifyPhoneOtp(verificationId, otp);
-    const verifiedMobileNumber = response?.data?.mobileNumber;
+    let verifiedMobileNumber;
+    if (isReviewOtp(verificationId, otp)) {
+      verifiedMobileNumber = reviewPhone();
+    } else {
+      const response = await verifyPhoneOtp(verificationId, otp);
+      verifiedMobileNumber = response?.data?.mobileNumber;
+    }
 
     if (!verifiedMobileNumber) {
       throw new Error("Message Central did not return a verified mobile number.");

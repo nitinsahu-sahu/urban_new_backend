@@ -1,5 +1,9 @@
 const { pool } = require("../../../../dbhelper");
 const { sendPhoneOtp } = require("../../../methods/message_central");
+const {
+  isReviewPhone,
+  reviewVerificationId,
+} = require("./review_otp_config");
 
 const send_phone_otp_model = async (phone) => {
   try {
@@ -17,6 +21,17 @@ const send_phone_otp_model = async (phone) => {
     }
 
     const user = result.rows[0];
+
+    // Review mode is opt-in and can only be used by the configured account.
+    // It intentionally returns the same response shape as the SMS provider.
+    if (isReviewPhone(phone)) {
+      return {
+        success: true,
+        message: "OTP sent successfully.",
+        verificationId: reviewVerificationId,
+        data: user,
+      };
+    }
 
     // Send OTP using Message Central
     const otpResponse = await sendPhoneOtp(phone);

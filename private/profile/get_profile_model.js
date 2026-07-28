@@ -1,34 +1,13 @@
 const { pool } = require("../../dbhelper");
-const jwt = require("jsonwebtoken");
 
-const get_profile_model = async (authorizationHeader) => {
+const get_profile_model = async (email) => {
   try {
-    const token = authorizationHeader.substring(7);
-
-    const email = await jwt.verify(
-      token,
-      "deepak",
-      async (error, decodedToken) => {
-        if (error) {
-          return {
-            success: false,
-            error: "Invalid token or Token Expired",
-          };
-        }
-
-        if (!decodedToken || !decodedToken.email) {
-          console.error("Invalid token");
-          return {
-            success: false,
-            error: "Invalid Token",
-            message:
-              "Your session has expired. Please log in again to continue.",
-          };
-        }
-
-        return decodedToken.email;
-      }
-    );
+    if (!email) {
+      return {
+        success: false,
+        message: "Your session has expired. Please log in again to continue.",
+      };
+    }
 
     const query = `
       SELECT 
@@ -66,6 +45,7 @@ const get_profile_model = async (authorizationHeader) => {
   } catch (error) {
     return {
       success: false,
+      message: "Unable to fetch profile data.",
       error: error.message,
     };
   }
