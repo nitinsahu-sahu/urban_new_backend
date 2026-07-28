@@ -8,7 +8,6 @@ const { delete_user } = require("./delete/delete_user_controller");
 const { signup_user_controller } = require("./signUp/signup_controller");
 const { login_user_controller } = require("./newLogin/newLogin_controller");
 
-// 👇 NEW IMPORT
 const {
   send_phone_otp_controller,
 } = require("./newLogin/phoneLogin/send_phone_otp_controller");
@@ -41,7 +40,6 @@ router.post("/signup", signup_user_controller);
 
 router.post("/login", login_user_controller);
 
-// 👇 NEW ROUTE
 router.post("/send-phone-otp", send_phone_otp_controller);
 
 router.post(

@@ -20,17 +20,12 @@ const sendPhoneOtp = async (phone) => {
 
     return response.data;
   } catch (error) {
-    console.log("Status:", error.response?.status);
-    console.log("Data:", error.response?.data);
-
     throw error;
   }
 };
 
 const verifyPhoneOtp = async (verificationId, otp) => {
   try {
-    // Message Central exposes validateOtp as a GET endpoint. Sending a POST can
-    // be rejected before the OTP is evaluated, even when the OTP is correct.
     const response = await axios.get(
       "https://cpaas.messagecentral.com/verification/v3/validateOtp",
       {
@@ -46,11 +41,6 @@ const verifyPhoneOtp = async (verificationId, otp) => {
 
     return response.data;
   } catch (error) {
-    console.log("Message Central OTP verification failed:", {
-      status: error.response?.status,
-      response: error.response?.data,
-    });
-
     throw error;
   }
 };
