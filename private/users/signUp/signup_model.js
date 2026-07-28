@@ -23,6 +23,21 @@ const signup_user_model = async (full_name, email, password, phone) => {
       };
     }
 
+    // Phone numbers are also unique account credentials. Validate them before
+    // insertion so the app can show a clear message instead of a generic
+    // signup failure from the database.
+    const phoneResult = await pool.query(
+      "SELECT user_id FROM users WHERE phone = $1 LIMIT 1",
+      [phone]
+    );
+
+    if (phoneResult.rows.length > 0) {
+      return {
+        success: false,
+        message: "This phone number is already in use. Please use another number.",
+      };
+    }
+
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -78,8 +93,21 @@ const signup_user_model = async (full_name, email, password, phone) => {
   } catch (err) {
     console.error("Error in signup_user_model:", err);
 
+    if (err.code === "23505") {
+      const isPhoneDuplicate =
+        err.constraint?.toLowerCase().includes("phone") ||
+        err.detail?.toLowerCase().includes("(phone)");
+      return {
+        success: false,
+        message: isPhoneDuplicate
+          ? "This phone number is already in use. Please use another number."
+          : "User already exists with this email.",
+      };
+    }
+
     return {
       success: false,
+      message: "Unable to create your account. Please try again.",
       error: err.message, // Debugging ke liye
     };
   }
