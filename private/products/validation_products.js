@@ -1,4 +1,8 @@
 const Joi = require("joi");
+const bulkPricingSchema = Joi.object({
+  min_qty: Joi.number().integer().min(2).required(),
+  price: Joi.number().precision(2).required(),
+});
 
 const variantSchema = Joi.object({
   variant_id: Joi.string().required(),
@@ -6,6 +10,9 @@ const variantSchema = Joi.object({
   variant_image: Joi.string().uri().required(),
   variant_sale_price: Joi.number().precision(2).required(),
   variant_actual_price: Joi.number().precision(2).required(),
+    bulk_pricing: Joi.array()
+    .items(bulkPricingSchema)
+    .default([]),
 });
 
 const create_products_auth = Joi.object({
