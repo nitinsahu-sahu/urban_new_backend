@@ -15,9 +15,9 @@ const create_orders_controller = async (request, response, next) => {
       product,
     } = request.body;
 
-    const productIds = product.map((p) => p.product_id);
-    const outOfStockQuery = `SELECT product_id FROM public.products WHERE product_id = ANY($1::text[]) AND is_out_of_stock = true`;
-    const outOfStockResult = await pool.query(outOfStockQuery, [productIds]);
+    const productIdsAsNumber = product.map((p) => Number(p.product_id));
+    const outOfStockQuery = `SELECT product_id FROM public.products WHERE product_id = ANY($1::bigint[]) AND is_out_of_stock = true`;
+    const outOfStockResult = await pool.query(outOfStockQuery, [productIdsAsNumber]);
     if (outOfStockResult.rows.length > 0) {
       return response.status(400).json({
         success: false,

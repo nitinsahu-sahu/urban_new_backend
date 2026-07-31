@@ -5,7 +5,7 @@ const check_in_cart_model = async (user_id, product_id) => {
     const query = `
       SELECT order_id, item_quantity
       FROM orders
-      WHERE user_id = $1
+      WHERE user_id = $1::bigint
         AND status = 'IN_CART'
         AND is_deleted = false
         AND EXISTS (
